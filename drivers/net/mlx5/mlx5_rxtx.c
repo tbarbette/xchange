@@ -638,10 +638,7 @@ mlx5_rx_queue_count(struct rte_eth_dev *dev, uint16_t rx_queue_id)
 	struct mlx5_priv *priv = dev->data->dev_private;
 	struct mlx5_rxq_data *rxq;
 
-	if (dev->rx_pkt_burst != mlx5_rx_burst) {
-		rte_errno = ENOTSUP;
-		return -rte_errno;
-	}
+
 	rxq = (*priv->rxqs)[rx_queue_id];
 	if (!rxq) {
 		rte_errno = EINVAL;
