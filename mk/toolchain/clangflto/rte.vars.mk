@@ -17,12 +17,12 @@ CPP       = $(CROSS)cpp
 # AS      = $(CROSS)as
 AS        = nasm
 AR        = $(CROSS)llvm-ar
-LD        = $(CROSS)ld
-OBJCOPY   = $(CROSS)objcopy
-OBJDUMP   = $(CROSS)objdump
-STRIP     = $(CROSS)strip
-READELF   = $(CROSS)readelf
-GCOV      = $(CROSS)gcov
+LD        = $(CROSS)ld.lld
+OBJCOPY   = $(CROSS)llvm-objcopy
+OBJDUMP   = $(CROSS)llvm-objdump
+STRIP     = $(CROSS)llvm-strip
+READELF   = $(CROSS)llvm-readelf
+GCOV      = $(CROSS)llvm-cov
 RANLIB    = $(CROSS)llvm-ranlib
 
 
@@ -50,7 +50,7 @@ endif
 # process cpu flags
 include $(RTE_SDK)/mk/toolchain/$(RTE_TOOLCHAIN)/rte.toolchain-compat.mk
 
-# workaround clang bug with warning "missing field initializer" for "= {0}"
+# disable warning for non-initialised fields
 WERROR_FLAGS += -Wno-missing-field-initializers
 
 # disable packed member unalign warnings
