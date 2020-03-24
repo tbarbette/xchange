@@ -27,7 +27,7 @@ trap 'rm -f "$DUMPFILE"' EXIT
 #if [ $error -eq 1 ]; then
 #	objdump -t $OBJFILE >$DUMPFILE
 #else
-#	llvm-objdump -t $OBJFILE >$DUMPFILE
+llvm-nm  $OBJFILE >$DUMPFILE
 #fi
 
 ret=0

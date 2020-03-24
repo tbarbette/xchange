@@ -428,29 +428,30 @@ static void output_pmd_info_string(struct elf_info *info, char *outfile)
 
 int main(int argc, char **argv)
 {
-	struct elf_info info = {0};
-	int rc = 1;
-
-	if (argc < 3) {
-		fprintf(stderr,
-			"usage: %s <object file> <c output file>\n",
-			basename(argv[0]));
-		exit(127);
-	}
-	use_stdin = !strcmp(argv[1], "-");
-	use_stdout = !strcmp(argv[2], "-");
-	parse_elf(&info, argv[1]);
-
-	if (locate_pmd_entries(&info) < 0)
-		exit(1);
-
-	if (info.drivers) {
-		output_pmd_info_string(&info, argv[2]);
-		rc = 0;
-	} else {
-		fprintf(stderr, "No drivers registered\n");
-	}
-
-	parse_elf_finish(&info);
-	exit(rc);
+//	struct elf_info info = {0};
+//	int rc = 1;
+//
+//	if (argc < 3) {
+//		fprintf(stderr,
+//			"usage: %s <object file> <c output file>\n",
+//			basename(argv[0]));
+//		exit(127);
+//	}
+//	use_stdin = !strcmp(argv[1], "-");
+//	use_stdout = !strcmp(argv[2], "-");
+//	parse_elf(&info, argv[1]);
+//
+//	if (locate_pmd_entries(&info) < 0)
+//		exit(1);
+//
+//	if (info.drivers) {
+//		output_pmd_info_string(&info, argv[2]);
+//		rc = 0;
+//	} else {
+//		fprintf(stderr, "No drivers registered\n");
+//	}
+//
+//	parse_elf_finish(&info);
+//	exit(rc);
+	exit(0);
 }
