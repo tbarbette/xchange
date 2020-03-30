@@ -1,8 +1,15 @@
-## Building DPDK with clang LTO:
+# Building DPDK with clang LTO:
 
 This branch contains the changes required for building DPDK by using clang Link Time Optimization (LTO).
 
 We added a new toolchain rule: `x86_64-native-linux-clangflto` that requires [LLD](https://lld.llvm.org/).
+
+To build DPDK with LTO, run:
+```
+make install T=x86_64-native-linux-clangflto
+```
+
+## Changes:
 
 The changes are as follows:
 
@@ -53,5 +60,5 @@ llc -filetype=obj $@ -o $@.o
 
 
 
-Note: To use LTO, `binutils` and 'llvm` might need to be built by following the guidelines in [llvm-tutorial](https://bitbucket.org/nslab/llvm-tutorial/src/master/) repo. You should use a stable `binutils` (e.g., 2.32).
+Note: To use LTO, `binutils` and `llvm` might need to be built by following the guidelines in [llvm-tutorial](https://bitbucket.org/nslab/llvm-tutorial/src/master/) repo. You should use a stable `binutils` (e.g., 2.32).
 Make sure that `/usr/lib/bfd-plugins` exists. Otherwise, make one and copy `libLTO.*` and `LLVMgold.so` in it.
