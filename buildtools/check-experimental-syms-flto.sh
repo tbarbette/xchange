@@ -20,15 +20,9 @@ fi
 
 DUMPFILE=$(mktemp -t dpdk.${0##*/}.XXX.objdump)
 trap 'rm -f "$DUMPFILE"' EXIT
-#llvm-objdump -t $OBJFILE 1>/dev/null 2> $DUMPFILE"-error"
-#error=`grep -c 'The file was not recognized as a valid object file'  $DUMPFILE"-error"`
-#echo "error is $error"
-#rm -f  $DUMPFILE"-error"
-#if [ $error -eq 1 ]; then
-#	objdump -t $OBJFILE >$DUMPFILE
-#else
-llvm-nm  $OBJFILE >$DUMPFILE
-#fi
+# llc -filetype=obj $OBJFILE -o $OBJFILE.o
+# objdump -t $OBJFILE.o >$DUMPFILE
+llvm-nm $OBJFILE >$DUMPFILE
 
 ret=0
 for SYM in `$LIST_SYMBOL -S EXPERIMENTAL $MAPFILE |cut -d ' ' -f 3`

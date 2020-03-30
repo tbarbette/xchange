@@ -24,6 +24,7 @@ STRIP     = $(CROSS)llvm-strip
 READELF   = $(CROSS)llvm-readelf
 GCOV      = $(CROSS)llvm-cov
 RANLIB    = $(CROSS)llvm-ranlib
+LLC       = $(CROSS)llc -filetype=obj
 
 
 ifeq ("$(origin CC)", "command line")
@@ -58,5 +59,5 @@ ifeq ($(shell test $(CLANG_MAJOR_VERSION) -ge 4 && echo 1), 1)
 WERROR_FLAGS += -Wno-address-of-packed-member
 endif
 
-export CC AS AR LD OBJCOPY OBJDUMP STRIP READELF RANLIB
+export CC AS AR LD OBJCOPY OBJDUMP STRIP READELF RANLIB LLC
 export TOOLCHAIN_CFLAGS TOOLCHAIN_LDFLAGS TOOLCHAIN_ASFLAGS
