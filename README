@@ -4,6 +4,13 @@ This branch contains the changes required for building DPDK by using clang Link 
 
 We added a new toolchain rule: `x86_64-native-linux-clangflto` that requires [LLD](https://lld.llvm.org/).
 
+You have to first install LLVM 10.0 via [Install](https://bitbucket.org/nslab/llvm-project/src/master/llvm-clang.sh). And then make LLD the default linker:
+
+```
+cd /usr/bin
+sudo cp ld.lld ./ld
+```
+
 To build DPDK with LTO, run:
 ```
 make install T=x86_64-native-linux-clangflto
