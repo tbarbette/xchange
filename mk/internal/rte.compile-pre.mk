@@ -58,22 +58,29 @@ C_TO_O_DISP = $(if $(V),"$(C_TO_O_STR)","  CC $(@)")
 endif
 EXPERIMENTAL_CHECK = $(RTE_SDK)/buildtools/check-experimental-syms.sh
 # Check whether Clang is using FLTO
-ifeq ($(CONFIG_RTE_TOOLCHAIN_CLANG_FLTO),y)
-EXPERIMENTAL_CHECK = $(RTE_SDK)/buildtools/check-experimental-syms-flto.sh
+ifeq ($(CONFIG_RTE_TOOLCHAIN_CLANG_LTO),y)
+EXPERIMENTAL_CHECK = $(RTE_SDK)/buildtools/check-experimental-syms-lto.sh
 endif
 CHECK_EXPERIMENTAL = $(EXPERIMENTAL_CHECK) $(SRCDIR)/$(EXPORT_MAP) $@
 
 
 PMDINFO_GEN = $(RTE_SDK_BIN)/app/dpdk-pmdinfogen $@ $@.pmd.c
-PMDINFO_LLC = echo 
 PMDINFO_CC = $(CC) $(CPPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@.pmd.o $@.pmd.c
 PMDINFO_LD = $(CROSS)ld -r $(filter-out -export-dynamic,$(LDFLAGS)) -o $@.o $@.pmd.o $@
-# Check whether Clang is using FLTO
-ifeq ($(CONFIG_RTE_TOOLCHAIN_CLANG_FLTO),y)
+PMDINFO_TO_O = if grep -q 'RTE_PMD_REGISTER_.*(.*)' $<; then \
+        echo "$(if $V,$(PMDINFO_GEN),  PMDINFO $@.pmd.c)" && \
+	$(PMDINFO_GEN) && \
+	echo "$(if $V,$(PMDINFO_CC),  CC $@.pmd.o)" && \
+	$(PMDINFO_CC) && \
+	echo "$(if $V,$(PMDINFO_LD),  LD $@)" && \
+	$(PMDINFO_LD) && \
+	mv -f $@.o $@; fi
+
+# Check whether Clang is using LTO
+ifeq ($(CONFIG_RTE_TOOLCHAIN_CLANG_LTO),y)
 PMDINFO_GEN = $(RTE_SDK_BIN)/app/dpdk-pmdinfogen $@.o $@.pmd.c
-PMDINFO_LLC =  $(CROSS)llc -filetype=obj $@ -o $@.o
-PMDINFO_LD = $(CROSS)ld.lld -r $(filter-out -export-dynamic,$(LDFLAGS)) -o $@.o $@.pmd.o $@
-endif
+PMDINFO_LLC =  $(LLC) -filetype=obj $@ -o $@.o
+PMDINFO_LD = $(CROSS)ld.lld -r $(filter-out -export-dynamic -flto -fuse-ld=lld -plugin-opt=save-temps,$(LDFLAGS)) -o $@.o $@.pmd.o $@
 PMDINFO_TO_O = if grep -q 'RTE_PMD_REGISTER_.*(.*)' $<; then \
 	echo "$(if $V,$(PMDINFO_GEN),  PMDINFO $@.pmd.c)" && \
 	$(PMDINFO_LLC) && \
@@ -83,6 +90,8 @@ PMDINFO_TO_O = if grep -q 'RTE_PMD_REGISTER_.*(.*)' $<; then \
 	echo "$(if $V,$(PMDINFO_LD),  LD $@)" && \
 	$(PMDINFO_LD) && \
 	mv -f $@.o $@; fi
+endif
+
 C_TO_O_CMD = 'cmd_$@ = $(C_TO_O_STR)'
 C_TO_O_DO = @set -e; \
 	echo $(C_TO_O_DISP); \

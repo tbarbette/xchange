@@ -10,7 +10,7 @@
 #   - define TOOLCHAIN_ASFLAGS variable (overridden by cmdline value)
 #
 
-CC        = $(CROSS)clang -flto
+CC        = $(CROSS)clang 
 KERNELCC  = $(CROSS)gcc
 CPP       = $(CROSS)cpp
 # for now, we don't use as but nasm.
@@ -24,7 +24,7 @@ STRIP     = $(CROSS)llvm-strip
 READELF   = $(CROSS)llvm-readelf
 GCOV      = $(CROSS)llvm-cov
 RANLIB    = $(CROSS)llvm-ranlib
-LLC       = $(CROSS)llc -filetype=obj
+LLC       = $(CROSS)llc 
 
 
 ifeq ("$(origin CC)", "command line")
@@ -35,8 +35,8 @@ endif
 HOSTAS    = as
 
 TOOLCHAIN_ASFLAGS =
-TOOLCHAIN_CFLAGS = 
-TOOLCHAIN_LDFLAGS = -plugin-opt=save-temps
+TOOLCHAIN_CFLAGS = -flto 
+TOOLCHAIN_LDFLAGS = -flto -fuse-ld=lld -plugin-opt=save-temps
 
 WERROR_FLAGS := -W -Wall -Wstrict-prototypes -Wmissing-prototypes
 WERROR_FLAGS += -Wmissing-declarations -Wold-style-definition -Wpointer-arith
