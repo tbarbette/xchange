@@ -1,29 +1,32 @@
-# Building DPDK with clang LTO:
+# Building DPDK with clang LTO
 
 This branch contains the changes required for building DPDK by using clang Link Time Optimization (LTO).
 
-We added a new toolchain rule: `x86_64-native-linux-clangflto` that requires [LLD](https://lld.llvm.org/).
+We added a new toolchain rule: `x86_64-native-linux-clanglto` that requires [LLD](https://lld.llvm.org/).
 
 You have to first install LLVM 10.0 via [Install](https://bitbucket.org/nslab/llvm-project/src/master/llvm-clang.sh). And then make LLD the default linker:
 
-```
+```bash
 cd /usr/bin
 sudo cp ld.lld ./ld
 ```
 
+**Click will be compiled without this step, but DPDK apps (e.g., testpmd) might not work.**
+
 To build DPDK with LTO, run:
-```
-make install T=x86_64-native-linux-clangflto
+
+```bash
+make install T=x86_64-native-linux-clanglto
 ```
 
-## Changes:
+## Changes
 
 The changes are as follows:
 
--  Define required variables in `mk/toolchain/clang/rte.vars.mk`.
+- Define required variables in `mk/toolchain/clanglto/rte.vars.mk`.
 
-```
-CC        = $(CROSS)clang -flto
+```Makefile
+CC        = $(CROSS)clang
 KERNELCC  = $(CROSS)gcc
 CPP       = $(CROSS)cpp
 # for now, we don't use as but nasm.
@@ -37,12 +40,15 @@ STRIP     = $(CROSS)llvm-strip
 READELF   = $(CROSS)llvm-readelf
 GCOV      = $(CROSS)llvm-cov
 RANLIB    = $(CROSS)llvm-ranlib
-LLC       = $(CROSS)llc -filetype=obj
+LLC       = $(CROSS)llc
+
+TOOLCHAIN_CFLAGS = -flto
+TOOLCHAIN_LDFLAGS = -flto -fuse-ld=lld -plugin-opt=save-temps
 
 export CC AS AR LD OBJCOPY OBJDUMP STRIP READELF RANLIB LLC
 ```
 
-- `KERNELCC` in `mk/toolchain/clangflto/rte.vars.mk` can also use `clang`, but to avoid errors, the following flags should be changed:
+- `KERNELCC` in `mk/toolchain/clanglto/rte.vars.mk` can also use `clang`, but to avoid errors, the following flags should be changed:
 
 ```
 kernel/linux/igb_uio/Makefile -> Remove -Werror from MODULE_CLAGS += -Winline ...
@@ -51,21 +57,19 @@ kernel/linux/kni/Makefile -> Remove -Werror from MODULE_CLAGS += -Wall ...
 
 - Change `ld` to `ld.lld` in `mk/internal/rte.compile-pre.mk`.
 
-```
+```Makefile
 PMDINFO_LD = $(CROSS)ld.lld $(LDFLAGS) -r -o $@.o $@.pmd.o $@
 ```
 
-- Added `buildtools/check-experimental-syms-flto.sh`. It uses `llvm-nm` rather than 'objdump' since the latter requires object files, while LTO generates LLVM IR bitcode. 
+- Added `buildtools/check-experimental-syms-lto.sh`. It uses `llvm-nm` rather than 'objdump' since the latter requires object files, while LTO generates LLVM IR bitcode.
 
-- Change the input of `buildtools/pmdinfogen/pmdinfogen.c`. This program will dynamically find some info about the PMD drivers and generates `*.o.pmd.c` by parsing `*.o` which are object files. 
-LTO generate IR bitcode that cannot be parsed by `pmdinfogen`. Therefore, we have to use [llc](https://llvm.org/docs/CommandGuide/llc.html) to create the object files required by this app. 
+- Change the input of `buildtools/pmdinfogen/pmdinfogen.c`. This program will dynamically find some info about the PMD drivers and generates `*.o.pmd.c` by parsing `*.o` which are object files.
+LTO generate IR bitcode that cannot be parsed by `pmdinfogen`. Therefore, we have to use [llc](https://llvm.org/docs/CommandGuide/llc.html) to create the object files required by this app.
 The following command creates an object file from an IR bit code. Check `mk/internal/rte.compile-pre.mk` for more details.
 
-```
+```bash
 llc -filetype=obj $@ -o $@.o
 ```
-
-
 
 Note: To use LTO, `binutils` and `llvm` might need to be built by following the guidelines in [llvm-tutorial](https://bitbucket.org/nslab/llvm-tutorial/src/master/) repo. You should use a stable `binutils` (e.g., 2.32).
 Make sure that `/usr/lib/bfd-plugins` exists. Otherwise, make one and copy `libLTO.*` and `LLVMgold.so` in it.
