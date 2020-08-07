@@ -504,7 +504,110 @@ int mlx5_dma_map(struct rte_pci_device *pdev, void *addr, uint64_t iova,
 		 size_t len);
 int mlx5_dma_unmap(struct rte_pci_device *pdev, void *addr, uint64_t iova,
 		   size_t len);
+/**
+ * Free the mbufs from the linear array of pointers.
+ *
+ * @param pkts
+ *   Pointer to array of packets to be free.
+ * @param pkts_n
+ *   Number of packets to be freed.
+ * @param olx
+ *   Configured Tx offloads mask. It is fully defined at
+ *   compile time and may be used for optimization.
+ */
+static __rte_always_inline void
+mlx5_tx_free_mbuf(struct rte_mbuf **restrict pkts,
+		  unsigned int pkts_n,
+		  unsigned int olx __rte_unused)
+{
+	struct rte_mempool *pool = NULL;
+	struct rte_mbuf **p_free = NULL;
+	struct rte_mbuf *mbuf;
+	unsigned int n_free = 0;
 
+	/*
+	 * The implemented algorithm eliminates
+	 * copying pointers to temporary array
+	 * for rte_mempool_put_bulk() calls.
+	 */
+	MLX5_ASSERT(pkts);
+	MLX5_ASSERT(pkts_n);
+	for (;;) {
+		for (;;) {
+			/*
+			 * Decrement mbuf reference counter, detach
+			 * indirect and external buffers if needed.
+			 */
+			mbuf = rte_pktmbuf_prefree_seg(*pkts);
+			if (likely(mbuf != NULL)) {
+				MLX5_ASSERT(mbuf == *pkts);
+				if (likely(n_free != 0)) {
+					if (unlikely(pool != mbuf->pool))
+						/* From different pool. */
+						break;
+				} else {
+					/* Start new scan array. */
+					pool = mbuf->pool;
+					p_free = pkts;
+				}
+				++n_free;
+				++pkts;
+				--pkts_n;
+				if (unlikely(pkts_n == 0)) {
+					mbuf = NULL;
+					break;
+				}
+			} else {
+				/*
+				 * This happens if mbuf is still referenced.
+				 * We can't put it back to the pool, skip.
+				 */
+				++pkts;
+				--pkts_n;
+				if (unlikely(n_free != 0))
+					/* There is some array to free.*/
+					break;
+				if (unlikely(pkts_n == 0))
+					/* Last mbuf, nothing to free. */
+					return;
+			}
+		}
+		for (;;) {
+			/*
+			 * This loop is implemented to avoid multiple
+			 * inlining of rte_mempool_put_bulk().
+			 */
+			MLX5_ASSERT(pool);
+			MLX5_ASSERT(p_free);
+			MLX5_ASSERT(n_free);
+			/*
+			 * Free the array of pre-freed mbufs
+			 * belonging to the same memory pool.
+			 */
+			rte_mempool_put_bulk(pool, (void *)p_free, n_free);
+			if (unlikely(mbuf != NULL)) {
+				/* There is the request to start new scan. */
+				pool = mbuf->pool;
+				p_free = pkts++;
+				n_free = 1;
+				--pkts_n;
+				if (likely(pkts_n != 0))
+					break;
+				/*
+				 * This is the last mbuf to be freed.
+				 * Do one more loop iteration to complete.
+				 * This is rare case of the last unique mbuf.
+				 */
+				mbuf = NULL;
+				continue;
+			}
+			if (likely(pkts_n == 0))
+				return;
+			n_free = 0;
+			break;
+		}
+	}
+}
 /**
  * Provide safe 64bit store operation to mlx5 UAR region for both 32bit and
  * 64bit architectures.
@@ -652,7 +755,7 @@ static __rte_always_inline void
 mlx5_tx_dbrec_cond_wmb(struct mlx5_txq_data *txq, volatile struct mlx5_wqe *wqe,
 		       int cond)
 {
-	uint64_t *dst = MLX5_TX_BFREG(txq);
+	uint64_t *dst = (uint64_t*)MLX5_TX_BFREG(txq);
 	volatile uint64_t *src = ((volatile uint64_t *)wqe);
 
 	rte_cio_wmb();
