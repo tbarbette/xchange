@@ -1466,6 +1466,7 @@ const struct eth_dev_ops mlx5_dev_ops_isolate = {
 	.txq_info_get = mlx5_txq_info_get,
 	.rx_burst_mode_get = mlx5_rx_burst_mode_get,
 	.tx_burst_mode_get = mlx5_tx_burst_mode_get,
+	.rx_queue_count = mlx5_rx_queue_count,
 	.rx_queue_intr_enable = mlx5_rx_intr_enable,
 	.rx_queue_intr_disable = mlx5_rx_intr_disable,
 	.is_removed = mlx5_is_removed,
