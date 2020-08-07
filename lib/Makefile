@@ -115,7 +115,7 @@ DIRS-$(CONFIG_RTE_LIBRTE_IPSEC) += librte_ipsec
 DEPDIRS-librte_ipsec := librte_eal librte_mbuf librte_cryptodev librte_security \
 			librte_net
 DIRS-$(CONFIG_RTE_LIBRTE_XCHG) += librte_xchg
-DEPDIRS-librte_xchg := librte_mbuf
+DEPDIRS-librte_xchg := librte_mbuf librte_ethdev
 DIRS-$(CONFIG_RTE_LIBRTE_TELEMETRY) += librte_telemetry
 DEPDIRS-librte_telemetry := librte_eal librte_metrics librte_ethdev
 DIRS-$(CONFIG_RTE_LIBRTE_RCU) += librte_rcu
