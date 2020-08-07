@@ -52,7 +52,7 @@ CONFIG_RTE_ARCH_STRICT_ALIGN=n
 #
 # Enable link time optimization
 #
-CONFIG_RTE_ENABLE_LTO=n
+CONFIG_RTE_ENABLE_LTO=y
 
 #
 # Compile to share library
