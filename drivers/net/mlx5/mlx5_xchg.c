@@ -1,5 +1,5 @@
 #include "mlx5_rxtx.h"
-#include "mlx5_xchg.h"
+#include <rte_xchg.h>
 
 #include "mlx5_rxtx_common.h"
 #include "mlx5_rxtx_common.c"

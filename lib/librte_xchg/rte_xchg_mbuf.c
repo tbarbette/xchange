@@ -1,9 +1,5 @@
-#include <rte_mbuf.h>
-#include "mlx5_rxtx.h"
-#include "mlx5_xchg.h"
+#include <rte_xchg.h>
 
-#include "mlx5_rxtx_common.h"
-#include "mlx5_rxtx_common.c"
 
     inline struct rte_mbuf* get_buf(struct xchg* x) {
         return (struct rte_mbuf*)x;
@@ -64,19 +60,19 @@
 
 
     void xchg_set_len(struct xchg* xchg, uint16_t len) {
-        PKT_LEN(get_buf(xchg)) = len;
+        get_buf(xchg)->pkt_len = len;
     }
 
     uint16_t xchg_get_data_len(struct xchg* xchg) {
-        return DATA_LEN(get_buf(xchg));
+        return get_buf(xchg)->data_len;
     }
 
     void xchg_set_data_len(struct xchg* xchg, uint16_t len) {
-        DATA_LEN(get_buf(xchg)) = len;
+        get_buf(xchg)->data_len = len;
     }
 
     uint16_t xchg_get_len(struct xchg* xchg) {
-        return PKT_LEN(get_buf(xchg));
+        return get_buf(xchg)->pkt_len;
     }
 
     void xchg_finish_packet(struct xchg* xchg) {
@@ -109,7 +105,10 @@
     }
 
     void xchg_tx_completed(struct rte_mbuf** elts, unsigned int part, unsigned int olx) {
-        mlx5_tx_free_mbuf(elts, part, olx);
+        //mlx5_tx_free_mbuf(elts, part, olx);
+        (void)elts;
+        (void)part;
+        (void)olx;
     }
 
 
@@ -123,7 +122,7 @@
 
     int xchg_nb_segs(struct xchg* xchg) {
         struct rte_mbuf* pkt = (struct rte_mbuf*) xchg;
-        return NB_SEGS(pkt);
+        return pkt->nb_segs;
     }
 
     bool xchg_do_tx_free = true;

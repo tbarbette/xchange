@@ -1,10 +1,16 @@
+#include <stdbool.h>
+#include <rte_mbuf.h>
+#include <rte_ethdev.h>
+#include <rte_ethdev_core.h>
+
 struct rte_mempool;
 
 struct xchg {
 };
 
-extern bool xchg_elts_vec;
-extern bool xchg_do_tx_free;
+    extern bool xchg_elts_vec;
+    extern bool xchg_do_tx_free;
+
     void xchg_set_buffer(struct xchg*, void*);
     void xchg_set_packet_type(struct xchg*, uint32_t);
     void xchg_set_rss_hash(struct xchg*, uint32_t);
@@ -36,8 +42,7 @@ extern bool xchg_do_tx_free;
     uint16_t xchg_get_outer_l3_len(struct xchg* xchg);
     uint8_t xchg_get_tsosz(struct xchg* xchg);
 
-uint16_t rte_mlx5_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,
-		 struct xchg **tx_pkts, uint16_t nb_pkts);
+
     struct xchg* xchg_tx_next(struct xchg** xchgs);
     int xchg_nb_segs(struct xchg* xchg);
     //Advance xchgs by one
@@ -51,6 +56,10 @@ uint16_t rte_mlx5_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,
     void xchg_tx_sent(struct rte_mbuf** elts, struct xchg** xchg);
     int xchg_has_flag(struct xchg* xchg, uint64_t f);
 uint16_t xchg_get_data_len(struct xchg* xchg);
+
+//External API for MLX5
+uint16_t rte_mlx5_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,
+		 struct xchg **tx_pkts, uint16_t nb_pkts);
 uint16_t
 mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
 //uint16_t mlx5_rx_burst(void *dpdk_rxq, struct rte_mbuf **pkts, uint16_t pkts_n);
