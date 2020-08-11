@@ -1,3 +1,10 @@
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) 2020 KTH
+ */
+
+#ifndef _RTE_XCHG_H_
+#define _RTE_XCHG_H_
+
 #include <stdbool.h>
 #include <rte_mbuf.h>
 #include <rte_ethdev.h>
@@ -91,4 +98,4 @@ rte_mlx5_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,
 	return nb_rx;
 }
 
-
+#endif
