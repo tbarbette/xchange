@@ -1,4 +1,4 @@
-# X-Change
+# X-Change: Efficient Metadata Management Model for Packet Processing
 
 X-Change model is an optimization to Data Plane Development Kit ([DPDK][dpdk-page]) that provides custom buffers to drivers; thus, metadata can be directly written into the applications' buffers rather than using an intermediate DPDK buffer. X-Change uses conversion functions instead of direct assignment to set the metadata fields. The X-Change API (i.e., the different conversion functions) is dependent on the driver's features, as some NICs provide more metadata. For more information, please refer to PacketMill's [paper][packetmill-paper] and [main repository][packetmill-repo]. 
 
@@ -7,7 +7,7 @@ X-Change model is an optimization to Data Plane Development Kit ([DPDK][dpdk-pag
 
 ## Why X-Change?
 
-X-Change provides an efficient metadata management for packet processing. More specifically, it addresses the three main problems associated with current DPDK-based metadata management models:
+X-Change provides an efficient metadata management model for packet processing. More specifically, it addresses the three main problems associated with current DPDK-based metadata management models:
 
 1. DPDK uses a distinct metadata buffer for every packet, but these extra metadata buffers reduce cache locality. In contrast, we only need a limited number of metadata buffers, as packet processing frameworks use batching.
 
@@ -34,7 +34,7 @@ You can compile/build X-Change via `usertools/dpdk-setup.sh`. We have tested X-C
 
 **Please make sure that `CONFIG_RTE_LIBRTE_XCHG=y` and `CONFIG_RTE_LIBRTE_XCHG_MBUF=y` are set in `config/common_base`.**
 
-To make the most out of X-Change, it is important to enable Link-Time Optimization (LTO) to make the most out of X-Change. Using LTO enables the compiler to perform 'whole program' optimizations during link time and inline the coversion functions introduced by X-Change, achieving flexibility with zero overhead.
+To make the most out of X-Change, it is essential to use Link-Time Optimization (LTO). Using LTO allows the compiler to perform 'whole program' optimizations during link time and inline the conversion functions introduced by X-Change, achieving zero-overhead flexibility.
 
 
 
@@ -65,7 +65,9 @@ make install T=x86_64-native-linux-clanglto
 
 ## Using X-Change
 
-To use X-Change with any DPDK-based application, you have to export `RTE_SDK` & `RTE_TARGET` and use `-lrte_xchang_mbuf` flag during compilation. We have only tested X-Change with [FastClick][fastclick-repo]. For more information, please refer to PacketMill's [repo][packetmill-repo].
+To use X-Change with any DPDK-based application, you have to override/re-implement functions in `lib/librte_xchg/rte_xchg_mbuf` and/or `drivers/net/mlx5/mlx5_xchg.c`. To compile your application, you need to export `RTE_SDK` & `RTE_TARGET` and use `-lrte_xchang_mbuf` to link your custom buffers.
+
+**We have only tested X-Change with [FastClick][fastclick-repo]. For more information, please refer to PacketMill's [repo][packetmill-repo].**
 
 
 ## Getting Help
