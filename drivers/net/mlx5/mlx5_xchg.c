@@ -73,7 +73,6 @@ rxq_cq_to_xchg(struct mlx5_rxq_data *rxq, struct xchg *xchg,
 }
 
 
-
 /**
  * DPDK callback for RX.
  *
@@ -795,7 +794,7 @@ mlx5_tx_burst_xchg_single_send(struct mlx5_txq_data *restrict txq,
 			  struct mlx5_txq_xchg_local *restrict loc,
 			  unsigned int olx)
 {
-   assert(false);
+    assert(false);
     //printf("SINGLESEND pkts %d, xchgs %p, xchg %p\n", pkts_n, loc->xchgs, *loc->xchgs);
 	/*
 	 * Subroutine is the part of mlx5_tx_burst_xchg_single()
@@ -1743,6 +1742,7 @@ mlx5_tx_burst_xchg_tmpl(struct mlx5_txq_data *restrict txq,
 	if (unlikely(!pkts_n))
 		return 0;
     loc.xchgs = xchgs_arg;
+	loc.pkts_loop = 0;
     loc.pkts_sent = 0;
 	loc.pkts_copy = 0;
 	loc.wqe_last = NULL;
@@ -2038,10 +2038,43 @@ MLX5_TXOFF_XCHG_DECL(none_empw,
 //MLX5_TXOFF_XCHG_DECL(none,
 //		MLX5_TXOFF_CONFIG_NONE)
 
+
+uint16_t
+rte_mlx5_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts)
+{
+	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
+	uint16_t nb_rx;
+
+	nb_rx = mlx5_rx_burst_xchg(dev->data->rx_queues[queue_id],
+				     xchgs, nb_pkts);
+	return nb_rx;
+}
+
+
 uint16_t
 rte_mlx5_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,
 		 struct xchg **tx_pkts, uint16_t nb_pkts)
 {
 	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
 	return mlx5_tx_xchg_burst_none_empw(dev->data->tx_queues[queue_id], tx_pkts, nb_pkts);
+}
+
+uint16_t
+rte_mlx5_rx_burst_stripped(uint16_t port_id, uint16_t queue_id,
+		 struct rte_mbuf **rx_pkts, const uint16_t nb_pkts)
+{
+	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
+	uint16_t nb_rx;
+
+	nb_rx = mlx5_rx_burst_stripped(dev->data->rx_queues[queue_id],
+				     rx_pkts, nb_pkts);
+	return nb_rx;
+}
+
+uint16_t
+mlx5_tx_burst_xchg(void *dpdk_txq,
+		 struct xchg **tx_pkts, uint16_t nb_pkts)
+{
+	return mlx5_tx_xchg_burst_none_empw(dpdk_txq, tx_pkts, nb_pkts);
 }

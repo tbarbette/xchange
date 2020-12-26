@@ -629,6 +629,25 @@ int mlx5_hairpin_cap_get(struct rte_eth_dev *dev,
 			 struct rte_eth_hairpin_cap *cap);
 int mlx5_dev_configure_rss_reta(struct rte_eth_dev *dev);
 
+#ifdef RTE_LIBRTE_XCHG
+uint16_t rte_mlx5_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,
+		 struct xchg **tx_pkts, uint16_t nb_pkts);
+uint16_t
+rte_mlx5_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts);
+uint16_t
+rte_mlx5_rx_burst_stripped(uint16_t port_id, uint16_t queue_id,
+		 struct rte_mbuf **rx_pkts, const uint16_t nb_pkts);
+
+
+uint16_t
+mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
+uint16_t
+mlx5_tx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
+uint16_t
+mlx5_rx_burst_stripped(void *dpdk_rxq, struct rte_mbuf **pkts, uint16_t pkts_n);
+#endif
+
 /* mlx5_mac.c */
 
 int mlx5_get_mac(struct rte_eth_dev *dev, uint8_t (*mac)[RTE_ETHER_ADDR_LEN]);

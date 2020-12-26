@@ -38,10 +38,6 @@
         return get_buf(xchg)->outer_l3_len;
     }
 
-// int xchg_has_flag(struct xchg* xchg, uint64_t f) {
-//       return get_buf(xchg)->ol_flags & f;
-//    }
-
     void xchg_clear_flag(struct xchg* xchg, uint64_t f) {
         get_buf(xchg)->ol_flags &= f;
     }
@@ -86,7 +82,7 @@
         (void) xchgs; //Mbuf is set on advance
         struct rte_mbuf* xchg = *pkt; //Buffer in the ring
 		rte_prefetch0(xchg);
-        *pkt = rte_mbuf_raw_alloc(mp); //Allocate packet to put back in the ring 
+        *pkt = rte_mbuf_raw_alloc(mp); //Allocate packet to put back in the ring
         return (struct xchg*)xchg;
     }
 

@@ -331,6 +331,10 @@ mlx5_dev_start(struct rte_eth_dev *dev)
 	rte_wmb();
 	dev->tx_pkt_burst = mlx5_select_tx_function(dev);
 	dev->rx_pkt_burst = mlx5_select_rx_function(dev);
+	#ifdef RTE_LIBRTE_XCHG
+	dev->tx_pkt_burst_xchg = &mlx5_tx_burst_xchg;
+	dev->rx_pkt_burst_xchg = &mlx5_rx_burst_xchg;
+	#endif
 	/* Enable datapath on secondary process. */
 	mlx5_mp_req_start_rxtx(dev);
 	mlx5_dev_interrupt_handler_install(dev);

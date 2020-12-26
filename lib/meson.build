@@ -21,7 +21,7 @@ libraries = [
 	'distributor', 'efd', 'eventdev',
 	'gro', 'gso', 'ip_frag', 'jobstats',
 	'kni', 'latencystats', 'lpm', 'member',
-	'power', 'pdump', 'rawdev',
+	'power', 'pdump', 'rawdev', 'xchg',
 	'rcu', 'rib', 'reorder', 'sched', 'security', 'stack', 'vhost',
 	# ipsec lib depends on net, crypto and security
 	'ipsec',

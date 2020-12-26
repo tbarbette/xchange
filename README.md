@@ -31,7 +31,6 @@ X-Change results in the following improvements:
 
 * [Pirelli et al.][tinynf-link] [OSDI'20][osdi-20-page] accelerates DPDK model by removing the need for dynamic packet metadata. However, it also prevents buffering of packets, such as switching packets between cores, reordering packets, and stream processing; even a DPI would need to copy packets. Hence, it comes with a lot of drawbacks. X-Change also reduces the number of metadata buffers, but without imposing those restrictions. Furthermore, X-Change is more generic, as it brings programmability inside the driver, which makes it possible to implement buffer exchanging, or the model proposed by Pirelli et al., without even re-compiling DPDK.
 
-
 ## Building X-Change
 
 You can compile/build X-Change via `usertools/dpdk-setup.sh`. We have tested X-Change with both `gcc` and `clang`.
@@ -66,9 +65,9 @@ make install T=x86_64-native-linux-clanglto
 
 As X-Change is only implemented in the MLX5 driver for now, one has to call `mlx5_rx_burst_xchg` instead of `rte_eth_rx_burst` (or `mlx5_rx_burst_stripped` that is the equivalent direct call using mlx5 we provided for a point-to-point comparison). If built with `-lrte_xchg_mbuf`, you can use `mlx5_rx_burst_xchg` as a drop-in replacement for `rte_eth_rx_burst` as it uses our default implementation of the xchg library (`lib/librte_xchg/rte_xchg_mbuf.c`) that behaves similar to the normal DPDK. While this will not bring any performance benefits, it ensures that the first step is working. The idea behind this implementation is to allow a full replacement of the normal DPDK mechanism by X-Change, with a default behavior similar to the standard one.
 
-To take advantage of X-Change, you have to provide an implementation of all functions defined in `lib/librte_xchf/rte_xchg.h` in your own application. One way to start is by to re-implement the functions in `lib/librte_xchg/rte_xchg_mbuf.c` that is the implementation leading to the standard DPDK behavior as explained above. However, you must **not** pass `-lrte_xchg_mbuf` as this would provide two implementations for the xchg API.
+A simple example is proposed in `examples/l2fwd-xchg`. Instead of the traditional rte\_mbuf of the `l2fwd` app, that versions use an xchg buffer composed of only a pointer to the buffer data, and the length of the packet data, nothing else. Indeed, this application does not use vlan, timestamps, has a single pool, does not buffer packets, ... So we need only that. The `xchg.c` version is an example made to work with that new buffer. You'll probably want to copy-paste it and start from that. With a ConnectX-5 the l2fwd-xchg has the same throughput of MTU-size packets than l2fwd because l2dwd uses nearly no memory, and the NIC/PCIe is the bottleneck. However, it does so with 2.4X less impact on the L1 cache, which leaves much more space for the very precious L1 when doing real processing at 100G.
 
-An example can be found in the implemntation of [FastClick][fastclick-repo]. The re-implementation of the RX path can be found [here][fastclick-xchg].
+A more complete example can be found in the implemntation of [FastClick][fastclick-repo]. The re-implementation of the RX path can be found [here][fastclick-xchg].
 
 Basically, the set of X-Change functions allow to tell the driver how to write some metadata in the user's metadata format.
 

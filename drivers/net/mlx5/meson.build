@@ -31,6 +31,12 @@ sources = files(
 	'mlx5_utils.c',
 	'mlx5_socket.c',
 )
+
+if (dpdk_conf.has('RTE_LIBRTE_XCHG'))
+    deps += ['xchg']
+    sources+=files('mlx5_xchg.c')
+endif
+
 if (dpdk_conf.has('RTE_ARCH_X86_64')
 	or dpdk_conf.has('RTE_ARCH_ARM64')
 	or dpdk_conf.has('RTE_ARCH_PPC_64'))

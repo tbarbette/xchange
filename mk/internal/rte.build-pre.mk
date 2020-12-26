@@ -4,4 +4,4 @@
 _BUILD_TARGETS := _prebuild _build _postbuild
 
 comma := ,
-linkerprefix = $(subst -Wl$(comma)-L,-L,$(addprefix -Wl$(comma),$1))
+linkerprefix = $(subst -Wl$(comma)-f,-f,$(subst -Wl$(comma)-l,-l,$(subst -Wl$(comma)-L,-L,$(addprefix -Wl$(comma),$1))))

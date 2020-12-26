@@ -2204,6 +2204,10 @@ mlx5_dev_spawn(struct rte_device *dpdk_dev,
 		 */
 		eth_dev->rx_pkt_burst = mlx5_select_rx_function(eth_dev);
 		eth_dev->tx_pkt_burst = mlx5_select_tx_function(eth_dev);
+		#ifdef RTE_LIBRTE_XCHG
+		eth_dev->rx_pkt_burst_xchg = &mlx5_rx_burst_xchg;
+		eth_dev->tx_pkt_burst_xchg = &mlx5_tx_burst_xchg;
+		#endif
 		return eth_dev;
 	}
 	/*

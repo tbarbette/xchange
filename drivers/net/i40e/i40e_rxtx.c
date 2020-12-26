@@ -518,6 +518,9 @@ i40e_rx_fill_from_stage(struct i40e_rx_queue *rxq,
 	return nb_pkts;
 }
 
+/**
+ * Replenish buffers in the RX queue
+ */
 static inline int
 i40e_rx_alloc_bufs(struct i40e_rx_queue *rxq)
 {

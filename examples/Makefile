@@ -44,6 +44,7 @@ DIRS-$(CONFIG_RTE_LIBRTE_CRYPTODEV) += l2fwd-crypto
 DIRS-$(CONFIG_RTE_LIBRTE_JOBSTATS) += l2fwd-jobstats
 DIRS-y += l2fwd-keepalive
 DIRS-y += l2fwd-keepalive/ka-agent
+DIRS-$(CONFIG_RTE_LIBRTE_XCHG) += l2fwd-xchg
 ifeq ($(CONFIG_RTE_LIBRTE_HASH),y)
 DIRS-$(CONFIG_RTE_LIBRTE_LPM) += l3fwd
 endif

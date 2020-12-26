@@ -347,6 +347,19 @@ typedef uint16_t (*eth_tx_burst_t)(void *txq,
 				   uint16_t nb_pkts);
 /**< @internal Send output packets on a transmit queue of an Ethernet device. */
 
+#ifdef RTE_LIBRTE_XCHG
+struct xchg;
+typedef uint16_t (*eth_rx_burst_xchg_t)(void *rxq,
+				   struct xchg **rx_pkts,
+				   uint16_t nb_pkts);
+/**< @internal Retrieve input packets from a receive queue of an Ethernet device in XCHG mode. */
+
+typedef uint16_t (*eth_tx_burst_xchg_t)(void *txq,
+				   struct xchg **tx_pkts,
+				   uint16_t nb_pkts);
+/**< @internal Send output packets on a transmit queue of an Ethernet device in XCHG mode. */
+#endif
+
 typedef uint16_t (*eth_tx_prep_t)(void *txq,
 				   struct rte_mbuf **tx_pkts,
 				   uint16_t nb_pkts);
@@ -782,6 +795,10 @@ struct rte_eth_dev {
 	eth_rx_burst_t rx_pkt_burst; /**< Pointer to PMD receive function. */
 	eth_tx_burst_t tx_pkt_burst; /**< Pointer to PMD transmit function. */
 	eth_tx_prep_t tx_pkt_prepare; /**< Pointer to PMD transmit prepare function. */
+#ifdef RTE_LIBRTE_XCHG
+	eth_rx_burst_xchg_t rx_pkt_burst_xchg; /**< Pointer to PMD receive function. */
+	eth_tx_burst_xchg_t tx_pkt_burst_xchg; /**< Pointer to PMD transmit function. */
+#endif
 	/**
 	 * Next two fields are per-device data but *data is shared between
 	 * primary and secondary processes and *process_private is per-process
