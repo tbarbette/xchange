@@ -114,8 +114,9 @@
 
     //Peek the next packet to be sent, do not advance yet
     struct xchg* xchg_tx_next(struct xchg** xchgs) {
-        struct my_xchg** p = (struct my_xchg**)xchgs;
-        struct my_xchg* pkt = *p;
+
+        struct my_xchg* pkt = (struct my_xchg*)*xchgs;
+        //printf("Sending XCHG %p -> %p",pkt, pkt->buffer);
         rte_prefetch0(pkt);
         return (struct xchg*)pkt;
     }
@@ -158,13 +159,15 @@
     void xchg_tx_sent(struct rte_mbuf** elts, struct xchg** xchgs) {
         struct rte_mbuf* tmp = *elts;
         struct rte_mbuf* mbuf = xchg_get_mbuf(*xchgs);
-        *elts = mbuf;
+
         if (tmp == 0) {
-             get_tx_buf(*xchgs)->buffer = 0;
+            get_tx_buf(*xchgs)->buffer = 0;
          }else
          {
             get_tx_buf(*xchgs)->buffer = ((uint8_t*)tmp) + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM;
          }
+         //printf("Sent normal %p->%p\n", *xchgs, get_tx_buf(*xchgs)->buffer);
+         *elts = mbuf;
     }
 
     //This is a testing/research parameter, it should always be false as in a XCHG driver, there's no reason to wait before doing the exchange of buffers

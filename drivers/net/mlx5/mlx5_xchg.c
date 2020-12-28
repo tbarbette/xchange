@@ -951,6 +951,7 @@ single_min_inline:
 				dptr = (uint8_t*)xchg_get_buffer(loc->next) +
 				       txq->inlen_mode - vlan;
 				inlen -= txq->inlen_mode;
+				//printf("Min inline %p",loc->next);
 				mlx5_tx_xchg_dseg_ptr(txq, loc, dseg,
 						 dptr, inlen, olx);
                 /*
@@ -994,6 +995,7 @@ single_part_inline:
 				 */
 				MLX5_ASSERT(inlen > MLX5_ESEG_MIN_INLINE_SIZE);
 				dlen = inlen - MLX5_ESEG_MIN_INLINE_SIZE;
+				//printf("Par inline %p\n",loc->next);
 				mlx5_tx_xchg_dseg_ptr(txq, loc, &wqe->dseg[1],
 						 dptr, dlen, olx);
 				++txq->wqe_ci;
@@ -1063,6 +1065,7 @@ single_no_inline:
 
 		xchg_tx_advance(&loc->xchgs);
 		loc->next = xchg_tx_next(loc->xchgs);
+		//printf("3 Advanced, next is %p\n",loc->next);
 		ret = mlx5_tx_xchg_able_to_empw(txq, loc, olx, true);
 		if (unlikely(ret != MLX5_TXCMP_CODE_SINGLE))
 			return ret;
@@ -1313,12 +1316,18 @@ next_empw:
             }*/
 
                  xchg_tx_sent(&txq->elts[txq->elts_head++ & txq->elts_m], loc->xchgs);
-        }
+		}
 
 			xchg_tx_advance(&loc->xchgs); //Advances pointer, so the top is always pointing to the "next to be sent"
-			if (unlikely(--loop == 0))
+			//printf("Advanced, next is %p\n", *loc->xchgs);
+			loc->next = xchg_tx_next(loc->xchgs); //Takes the pointer on top
+			if (unlikely(--loop == 0)) {
+				//printf("End of loop\n");
 				break;
-            loc->next = xchg_tx_next(loc->xchgs); //Takes the pointer on top
+			}
+
+
+
             //assert(loc->next != 0);
             //printf("Advanced, NEXT %p XCHGS %p",loc->next, loc->xchgs);
 /*			if (likely(loop > 1))
@@ -1420,7 +1429,7 @@ mlx5_tx_burst_xchg_single(struct mlx5_txq_data *restrict txq,
 		     unsigned int olx)
 {
 	enum mlx5_txcmp_code ret;
-	
+	//printf("XCHG SINGLE\n");
     ret = mlx5_tx_xchg_able_to_empw(txq, loc, olx, false);
 	if (ret == MLX5_TXCMP_CODE_SINGLE) {
         printf("All ordinary?");
@@ -1747,8 +1756,6 @@ mlx5_tx_burst_xchg_tmpl(struct mlx5_txq_data *restrict txq,
 	loc.pkts_copy = 0;
 	loc.wqe_last = NULL;
     //printf("TX BURST - xchgs %p xchg %p, n %d\n",loc.xchgs, *loc.xchgs, pkts_n);
-    for (unsigned i = 0; i < pkts_n; i++)
-        //printf("[%d] XCHG %p\n", i, ((struct rte_mbuf**)loc.xchgs)[i]);
 
 send_loop:
 	loc.pkts_loop = loc.pkts_sent;
@@ -1781,6 +1788,7 @@ send_loop:
 	if (unlikely(!loc.elts_free || !loc.wqe_free))
 		goto burst_exit;
 	for (;;) {
+		//printf("TMPL loop, xchgs %p, next %p\n", loc.xchgs, *loc.xchgs);
 		/*
 		 * Fetch the packet from array. Usually this is
 		 * the first packet in series of multi/single

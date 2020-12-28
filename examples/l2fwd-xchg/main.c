@@ -290,7 +290,7 @@ l2fwd_main_loop(void)
 				port_statistics[portid].rx += nb_rx;
 
 				for (j = 0; j < nb_rx; j++) {
-					m = pkts_burst[j];
+					m = pkts_burst[j + tail];
 					l2fwd_simple_forward(m, portid);
 				}
 				tail += nb_rx;
