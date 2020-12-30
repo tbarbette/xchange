@@ -492,7 +492,7 @@ int mlx5_rxq_check_vec_support(struct mlx5_rxq_data *rxq_data);
 int mlx5_check_vec_rx_support(struct rte_eth_dev *dev);
 uint16_t mlx5_rx_burst_vec(void *dpdk_txq, struct rte_mbuf **pkts,
 			   uint16_t pkts_n);
-#if RTE_LIBRTE_XCHG
+#ifdef RTE_LIBRTE_XCHG
 #include <rte_xchg.h>
 uint16_t mlx5_rx_burst_vec_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
 #endif

@@ -707,7 +707,7 @@ rxq_burst_v(struct mlx5_rxq_data *rxq, struct rte_mbuf **pkts, uint16_t pkts_n,
 	return rcvd_pkt;
 }
 
-#if RTE_LIBRTE_XCHG
+#ifdef RTE_LIBRTE_XCHG
 #include <rte_xchg.h>
 
 /**
@@ -1208,7 +1208,11 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		mbp2 = _mm_loadu_si128((__m128i *)&elts[pos + 2]);*/
 
 		struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
-		#pragma unroll
+			#if defined(__clang__)
+			#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+			#elif __GNUC_PREREQ(8,0)
+			#pragma GCC unroll 4
+			#endif
 		for (int i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 			// pos is accumulated in elts at the end of the loop
 			struct xchg* next = xchg_next(elts + i, xchgs, rxq->mp);
@@ -1380,7 +1384,11 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 
 		if (unlikely(n != MLX5_VPMD_DESCS_PER_LOOP)) {
 			if (unlikely(n > 0)) {
+				#if defined(__clang__)
 				#pragma unroll MLX5_VPMD_DESCS_PER_LOOP - 1
+				#elif __GNUC_PREREQ(8,0)
+				#pragma GCC unroll 3
+				#endif
 				for (unsigned i = 0; i < n; i++) {
 					//printf("Validate %p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci&q_mask,rxq->cq_ci&q_mask);
 					wq[i].addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(elts[i]));
@@ -1393,7 +1401,11 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			}
 
 			//The packets we received were actually not ready... Rollback!
+			#if defined(__clang__)
 			#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+			#elif __GNUC_PREREQ(8,0)
+			#pragma GCC unroll 4
+			#endif
 			for (int i = n; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 				/*if (n > 0)
 					printf("Cancel %p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci & q_mask,rxq->cq_ci &q_mask);*/
@@ -1405,7 +1417,11 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			break;
 		}
 		//printf("Received 4, idx %d!\n",elts_idx + pos);
-		#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+			#if defined(__clang__)
+			#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+			#elif __GNUC_PREREQ(8,0)
+			#pragma GCC unroll 4
+			#endif
 		for (unsigned i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 			//printf("%p -> %p\n", xchgs_vec[i], xchg_get_buffer(xchgs_vec[i]));
 			wq->addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(*elts));
