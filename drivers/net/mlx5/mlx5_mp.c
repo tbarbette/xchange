@@ -133,6 +133,7 @@ mp_secondary_handle(const struct rte_mp_msg *mp_msg, const void *peer)
 		rte_mb();
 		dev->rx_pkt_burst = mlx5_select_rx_function(dev);
 		dev->tx_pkt_burst = mlx5_select_tx_function(dev);
+		assert(false); //TODO select XCHG
 		mp_init_msg(dev, &mp_res, param->type);
 		res->result = 0;
 		ret = rte_mp_reply(&mp_res, peer);

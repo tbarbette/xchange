@@ -333,7 +333,10 @@ mlx5_dev_start(struct rte_eth_dev *dev)
 	dev->rx_pkt_burst = mlx5_select_rx_function(dev);
 	#ifdef RTE_LIBRTE_XCHG
 	dev->tx_pkt_burst_xchg = &mlx5_tx_burst_xchg;
-	dev->rx_pkt_burst_xchg = &mlx5_rx_burst_xchg;
+	if (mlx5_check_vec_rx_support(dev) > 0)
+			dev->rx_pkt_burst_xchg = priv->config.cqe_comp? &mlx5_rx_burst_xchg_vec_comp : &mlx5_rx_burst_xchg_vec;
+	else
+			dev->rx_pkt_burst_xchg = &mlx5_rx_burst_xchg;
 	#endif
 	/* Enable datapath on secondary process. */
 	mlx5_mp_req_start_rxtx(dev);

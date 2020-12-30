@@ -4,3 +4,5 @@ struct xchg {
 };
 
 #define my_xchg xchg
+
+#define DEBUG_XCHG 0

@@ -42,6 +42,16 @@
 
 #include "main.h"
 
+
+
+#if 1
+#define rte_direct_rx_burst_xchg(args...) rte_eth_rx_burst_xchg(args)
+#define rte_direct_tx_burst_xchg(args...) rte_eth_tx_burst_xchg(args)
+#else
+#define rte_direct_rx_burst_xchg(args...) rte_mlx5_rx_burst_xchg_vec(args)
+#define rte_direct_tx_burst_xchg(args...) rte_mlx5_tx_burst_xchg(args)
+#endif
+
 static volatile bool force_quit;
 
 /* MAC updating enabled by default */
@@ -194,6 +204,7 @@ l2fwd_main_loop(void)
 	struct my_xchg* pkts_burst[MAX_PKT_BURST * 2];
 	for (int i = 0; i < MAX_PKT_BURST * 2; i++) {
 		pkts_burst[i] = &pkts_burst_store[i];
+		pkts_burst[i]->buffer = 0;
 	}
 	struct my_xchg *m;
 	int sent;
@@ -242,7 +253,7 @@ l2fwd_main_loop(void)
 
 				portid = l2fwd_dst_ports[qconf->rx_port_list[i]];
 
-				sent = rte_eth_tx_burst_xchg(portid, 0, pkts_burst + cur, tail - cur);
+				sent = rte_direct_tx_burst_xchg(portid, 0, pkts_burst + cur, tail - cur);
 				if (sent) {
 					port_statistics[portid].tx += sent;
 					cur += sent;
@@ -285,19 +296,49 @@ l2fwd_main_loop(void)
 				printf("[%d %p] buf %p len %d\n",j, pkts_burst[j], pkts_burst[j]->buffer, pkts_burst[j]->plen);
 			}*/
 			if (likely(tail < MAX_PKT_BURST)) {
-				nb_rx = rte_eth_rx_burst_xchg(portid, 0, pkts_burst + tail, MAX_PKT_BURST);
+				#if DEBUG_XCHG
+				for (j = 0; j < MAX_PKT_BURST; j++) {
+
+					m = pkts_burst[j + tail];
+					//printf("Packet sz %d (%d/%d)->%lx\n",m->plen,j,nb_rx,*((uint64_t*)m->buffer));
+					if (!(m->buffer == 0 || *(m->buffer) == 0x61)) {
+						printf("pkt is %p\n",m);
+						printf("buf is %p\n",m->buffer);
+						printf("buf is %x\n",*(m->buffer));
+						assert(false);
+					}
+
+				}
+				#endif
+				nb_rx = rte_direct_rx_burst_xchg(portid, 0, pkts_burst + tail, MAX_PKT_BURST);
 
 				port_statistics[portid].rx += nb_rx;
 
 				for (j = 0; j < nb_rx; j++) {
+
 					m = pkts_burst[j + tail];
+					//printf("Packet sz %d (%d/%d)->%lx\n",m->plen,j,nb_rx,*((uint64_t*)m->buffer));
+					#if DEBUG_XCHG
+					assert(*(m->buffer) == 0x31);
+					*(m->buffer) = 0x32;
+					#endif
 					l2fwd_simple_forward(m, portid);
 				}
 				tail += nb_rx;
 			}
 
 			if (tail >= MAX_PKT_BURST) {
-				sent = rte_eth_tx_burst_xchg(portid, 0, pkts_burst + cur, tail - cur);
+				sent = rte_direct_tx_burst_xchg(portid, 0, pkts_burst + cur, tail - cur);
+#if DEBUG_XCHG
+				for (int i = 0; i < sent; i ++) {
+					if (!(pkts_burst[cur + i]->buffer == 0 || *(pkts_burst[cur + i]->buffer) == 0x61))  {
+						printf("Sent  %p\n", pkts_burst[cur + i] );
+						printf("PTR from TX is %p\n", pkts_burst[cur + i]->buffer );
+						printf("D from TX is %x\n", *(pkts_burst[cur + i]->buffer) );
+						assert(false);
+					}
+									}
+#endif
 
 				if (likely(sent)) {
 					port_statistics[portid].tx += sent;
@@ -308,6 +349,7 @@ l2fwd_main_loop(void)
 						prev_tsc = cur_tsc;
 					}
 				}
+
 			}
 
 		}

@@ -127,7 +127,7 @@ struct mlx5_rxq_data {
 	uint16_t port_id;
 	uint32_t rq_ci;
 	uint16_t consumed_strd; /* Number of consumed strides in WQE. */
-	uint32_t rq_pi;
+	uint32_t rq_pi; //Where we are in the RQ, ie buffers are read up to there
 	uint32_t cq_ci;
 	uint16_t rq_repl_thresh; /* Threshold for buffer replenishment. */
 	union {
@@ -492,6 +492,10 @@ int mlx5_rxq_check_vec_support(struct mlx5_rxq_data *rxq_data);
 int mlx5_check_vec_rx_support(struct rte_eth_dev *dev);
 uint16_t mlx5_rx_burst_vec(void *dpdk_txq, struct rte_mbuf **pkts,
 			   uint16_t pkts_n);
+#if RTE_LIBRTE_XCHG
+#include <rte_xchg.h>
+uint16_t mlx5_rx_burst_vec_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
+#endif
 
 /* mlx5_mr.c */
 

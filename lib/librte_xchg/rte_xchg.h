@@ -478,6 +478,12 @@ uint16_t
 rte_mlx5_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,
 	 struct xchg **xchgs, const uint16_t nb_pkts);
 uint16_t
+rte_mlx5_rx_burst_xchg_vec(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts);
+uint16_t
+rte_mlx5_rx_burst_xchg_vec_comp(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts);
+uint16_t
 rte_mlx5_rx_burst_stripped(uint16_t port_id, uint16_t queue_id,
 		 struct rte_mbuf **rx_pkts, const uint16_t nb_pkts);
 #endif

@@ -107,10 +107,70 @@ mlx5_rx_burst_vec(void *dpdk_rxq, struct rte_mbuf **pkts, uint16_t pkts_n)
 	uint64_t err = 0;
 
 	nb_rx = rxq_burst_v(rxq, pkts, pkts_n, &err);
-	if (unlikely(err | rxq->err_state))
+	if (unlikely(err | rxq->err_state)) {
 		nb_rx = rxq_handle_pending_error(rxq, pkts, nb_rx);
+	}
 	return nb_rx;
 }
+
+#ifdef RTE_LIBRTE_XCHG
+/**
+ * DPDK callback for vectorized RX.
+ *
+ * @param dpdk_rxq
+ *   Generic pointer to RX queue structure.
+ * @param[out] pkts
+ *   Array to store received packets.
+ * @param pkts_n
+ *   Maximum number of packets in array.
+ *
+ * @return
+ *   Number of packets successfully received (<= pkts_n).
+ */
+uint16_t
+mlx5_rx_burst_xchg_vec(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
+{
+	struct mlx5_rxq_data *rxq = dpdk_rxq;
+	uint16_t nb_rx;
+	uint64_t err = 0;
+
+	nb_rx = rxq_burst_v_xchg(rxq, xchgs, pkts_n, &err, 0);
+	if (unlikely(err | rxq->err_state)) {
+		printf("Unhandled error\n");
+		abort();
+		//nb_rx = rxq_handle_pending_error(rxq, pkts, nb_rx);
+	}
+	return nb_rx;
+}
+/**
+ * DPDK callback for vectorized RX.
+ *
+ * @param dpdk_rxq
+ *   Generic pointer to RX queue structure.
+ * @param[out] pkts
+ *   Array to store received packets.
+ * @param pkts_n
+ *   Maximum number of packets in array.
+ *
+ * @return
+ *   Number of packets successfully received (<= pkts_n).
+ */
+uint16_t
+mlx5_rx_burst_xchg_vec_comp(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
+{
+	struct mlx5_rxq_data *rxq = dpdk_rxq;
+	uint16_t nb_rx;
+	uint64_t err = 0;
+
+	nb_rx = rxq_burst_v_xchg(rxq, xchgs, pkts_n, &err, 1);
+	if (unlikely(err | rxq->err_state)) {
+		printf("Unhandled error\n");
+		abort();
+		//nb_rx = rxq_handle_pending_error(rxq, pkts, nb_rx);
+	}
+	return nb_rx;
+}
+#endif
 
 /**
  * Check a RX queue can support vectorized RX.

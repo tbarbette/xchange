@@ -1432,7 +1432,7 @@ mlx5_tx_burst_xchg_single(struct mlx5_txq_data *restrict txq,
 	//printf("XCHG SINGLE\n");
     ret = mlx5_tx_xchg_able_to_empw(txq, loc, olx, false);
 	if (ret == MLX5_TXCMP_CODE_SINGLE) {
-        printf("All ordinary?");
+        printf("All ordinary?\n");
 		goto ordinary_send;
     }
 	MLX5_ASSERT(ret == MLX5_TXCMP_CODE_EMPW);
@@ -2043,6 +2043,9 @@ static uint16_t mlx5_tx_xchg_burst_##func(void *txq, \
 MLX5_TXOFF_XCHG_DECL(none_empw,
 		MLX5_TXOFF_CONFIG_NONE | MLX5_TXOFF_CONFIG_EMPW)
 
+/*MLX5_TXOFF_XCHG_DECL(inline_empw,
+		MLX5_TXOFF_CONFIG_INLINE | MLX5_TXOFF_CONFIG_EMPW)*/
+
 //MLX5_TXOFF_XCHG_DECL(none,
 //		MLX5_TXOFF_CONFIG_NONE)
 
@@ -2058,6 +2061,33 @@ rte_mlx5_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,
 				     xchgs, nb_pkts);
 	return nb_rx;
 }
+
+
+uint16_t
+rte_mlx5_rx_burst_xchg_vec(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts)
+{
+	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
+	uint16_t nb_rx;
+
+	nb_rx = mlx5_rx_burst_xchg_vec(dev->data->rx_queues[queue_id],
+				     xchgs, nb_pkts);
+	return nb_rx;
+}
+
+
+uint16_t
+rte_mlx5_rx_burst_xchg_vec_comp(uint16_t port_id, uint16_t queue_id,
+	 struct xchg **xchgs, const uint16_t nb_pkts)
+{
+	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
+	uint16_t nb_rx;
+
+	nb_rx = mlx5_rx_burst_xchg_vec(dev->data->rx_queues[queue_id],
+				     xchgs, nb_pkts);
+	return nb_rx;
+}
+
 
 
 uint16_t

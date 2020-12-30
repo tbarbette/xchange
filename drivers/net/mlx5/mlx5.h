@@ -633,6 +633,10 @@ int mlx5_dev_configure_rss_reta(struct rte_eth_dev *dev);
 uint16_t
 mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
 uint16_t
+mlx5_rx_burst_xchg_vec(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
+uint16_t
+mlx5_rx_burst_xchg_vec_comp(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
+uint16_t
 mlx5_tx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n);
 uint16_t
 mlx5_rx_burst_stripped(void *dpdk_rxq, struct rte_mbuf **pkts, uint16_t pkts_n);
