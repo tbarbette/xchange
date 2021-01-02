@@ -5,7 +5,7 @@ include $(RTE_SDK)/mk/rte.vars.mk
 
 ifeq ($(CONFIG_RTE_LIBRTE_XCHG),y)
 
-APP = xchgsyms
+APP = dpdksyms
 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS += -DALLOW_EXPERIMENTAL_API

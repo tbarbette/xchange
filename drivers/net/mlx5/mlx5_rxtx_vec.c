@@ -127,7 +127,7 @@ mlx5_rx_burst_vec(void *dpdk_rxq, struct rte_mbuf **pkts, uint16_t pkts_n)
  * @return
  *   Number of packets successfully received (<= pkts_n).
  */
-uint16_t
+__rte_always_inline uint16_t
 mlx5_rx_burst_xchg_vec(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 {
 	struct mlx5_rxq_data *rxq = dpdk_rxq;
@@ -155,7 +155,7 @@ mlx5_rx_burst_xchg_vec(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
  * @return
  *   Number of packets successfully received (<= pkts_n).
  */
-uint16_t
+__rte_always_inline uint16_t
 mlx5_rx_burst_xchg_vec_comp(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 {
 	struct mlx5_rxq_data *rxq = dpdk_rxq;

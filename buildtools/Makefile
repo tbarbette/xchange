@@ -5,5 +5,6 @@
 include $(RTE_SDK)/mk/rte.vars.mk
 
 DIRS-y += pmdinfogen
+DIRS-y += syms
 
 include $(RTE_SDK)/mk/rte.subdir.mk

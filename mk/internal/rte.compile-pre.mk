@@ -63,6 +63,7 @@ EXPERIMENTAL_CHECK = $(RTE_SDK)/buildtools/check-experimental-syms-lto.sh
 endif
 CHECK_EXPERIMENTAL = $(EXPERIMENTAL_CHECK) $(SRCDIR)/$(EXPORT_MAP) $@
 
+XCHGSYMS = $(RTE_SDK_BIN)/app/xchgsyms $@ $@.pmd.c
 
 PMDINFO_GEN = $(RTE_SDK_BIN)/app/dpdk-pmdinfogen $@ $@.pmd.c
 PMDINFO_CC = $(CC) $(CPPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@.pmd.o $@.pmd.c

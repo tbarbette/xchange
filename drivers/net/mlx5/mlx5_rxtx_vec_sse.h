@@ -1038,7 +1038,7 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
  * @return
  *   Number of packets received including errors (<= pkts_n).
  */
-static inline uint16_t
+static __rte_always_inline uint16_t
 rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n,
 	    uint64_t *err, int comp_enabled)
 {

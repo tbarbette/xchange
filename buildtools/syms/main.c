@@ -146,15 +146,17 @@ main(int argc, char **argv)
     rte_eth_dev_start(0);
 	struct rte_eth_dev *dev = &rte_eth_devices[0];
 
-    get_sym(buf,dev->rx_pkt_burst_xchg);
-
-    get_sym(buftx,dev->rx_pkt_burst_xchg);
+    get_sym(buf, dev->rx_pkt_burst_xchg);
+    get_sym(buftx, dev->tx_pkt_burst_xchg);
 
     FILE * fh = fopen("rte_direct.h", "w");
     if (config.header) {
+        fprintf(fh, "#include <rte_common.h>\n");
+        fprintf(fh, "#include <rte_ethdev.h>\n");
+        fprintf(fh, "struct xchg;\n");
         fprintf(fh, "#define RTE_DIRECT 1\n");
-        fprintf(fh,"int %s(void*,struct xchg**, uint16_t);\n", buf);
-        fprintf(fh,"static __rte_always_inline uint16_t\n"
+        fprintf(fh, "int %s(void*,struct xchg**, uint16_t);\n", buf);
+        fprintf(fh, "static __rte_always_inline uint16_t\n"
 "rte_direct_rx_burst_xchg(uint16_t port_id, uint16_t queue_id,"
 "                         struct xchg **xchgs, const uint16_t nb_pkts)"
 "            {"
@@ -164,8 +166,8 @@ main(int argc, char **argv)
 "                            xchgs, nb_pkts);"
 "                 return nb_rx;"
 "            };\n", buf);
-        fprintf(fh,"int %s(void*,struct xchg**, uint16_t);\n", buftx);
-        fprintf(fh,"static __rte_always_inline uint16_t\n"
+        fprintf(fh, "int %s(void*,struct xchg**, uint16_t);\n", buftx);
+        fprintf(fh, "static __rte_always_inline uint16_t\n"
 "rte_direct_tx_burst_xchg(uint16_t port_id, uint16_t queue_id,"
 "                         struct xchg **xchgs, const uint16_t nb_pkts)"
 "            {"
@@ -176,7 +178,9 @@ main(int argc, char **argv)
 "                 return nb_tx;"
 "            };\n", buftx);
     } else {
-        printf("%s", buf);
+        printf("%s\n", buf);
+        printf("%s", buftx);
+
     }
     fclose(fh);
 

@@ -11,7 +11,6 @@ include $(RTE_SDK)/mk/rte.vars.mk
 # DIRS-$(CONFIG_RTE_LIBRTE_CMDLINE) += test-cmdline
 # DIRS-$(CONFIG_RTE_LIBRTE_PIPELINE) += test-pipeline
 # DIRS-$(CONFIG_RTE_LIBRTE_IPSEC) += test-sad
-# DIRS-$(CONFIG_RTE_LIBRTE_XCHG) += xchg-syms
 
 # ifeq ($(CONFIG_RTE_LIBRTE_BBDEV),y)
 # DIRS-$(CONFIG_RTE_TEST_BBDEV) += test-bbdev

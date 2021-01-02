@@ -42,14 +42,9 @@
 
 #include "main.h"
 
-
-
-#if 1
+#ifndef RTE_DIRECT
 #define rte_direct_rx_burst_xchg(args...) rte_eth_rx_burst_xchg(args)
 #define rte_direct_tx_burst_xchg(args...) rte_eth_tx_burst_xchg(args)
-#else
-#define rte_direct_rx_burst_xchg(args...) rte_mlx5_rx_burst_xchg_vec(args)
-#define rte_direct_tx_burst_xchg(args...) rte_mlx5_tx_burst_xchg(args)
 #endif
 
 static volatile bool force_quit;
