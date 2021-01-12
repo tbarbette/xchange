@@ -35,6 +35,7 @@ void xchg_set_data_len(struct xchg*, uint16_t);
 //Get the data len
 uint16_t xchg_get_data_len(struct xchg* xchg);
 
+
 //Clears all flags of the packet
 void xchg_clear_flag(struct xchg*, uint64_t);
 //Set a flag
@@ -53,25 +54,21 @@ void xchg_set_timestamp(struct xchg*, uint64_t);
 void xchg_set_fdir_id(struct xchg*, uint32_t);
 //Set the VLAN TCI
 void xchg_set_vlan(struct xchg*, uint32_t);
+//Returns the number of segments in the packet
+int xchg_nb_segs(struct xchg* xchg);
 
 
-//Descriptor advancement (advancing in the list/array provided by the user)
-
+//Descriptor advancement (advancing in the list/array provided by the user) for RX
 //Give the next descriptor pointer of the user list. One must also set in *buf the pointer to the rte_mbuf backing a buffer to receive new data
-struct xchg* xchg_next(struct rte_mbuf** buf, struct xchg** xchgs, struct rte_mempool* mp);
+struct xchg* xchg_rx_next(struct rte_mbuf** buf, struct xchg** xchgs, struct rte_mempool* mp);
 //Cancel the last xchg_next (it's how mlx5 works)
-void xchg_cancel(struct xchg*, struct rte_mbuf*);
+void xchg_rx_cancel(struct xchg*, struct rte_mbuf*);
 //Advance in the user list, one can see next as a "peek()" function and advance as a "pop" function.
-void xchg_advance(struct xchg*, struct xchg*** xchgs_p);
-//Convert a rte_mbuf buffer in the ring to its buffer pointer. As only the user manages those, one usually do a constant shift between the buffer pointer and the size of the rte_mbuf structure
-void* xchg_buffer_from_elt(struct rte_mbuf* buf);
-
-//An array of packets has been sent, free them. Only called if xchg_do_tx_sent_vec is true.
-//The goal of XCHG is to avoid this kind of double-looping. This is only for backward compatibility, XCHG exchange buffers so we never free the buffer, and especially don't wait to do it in buffer
-void xchg_tx_sent_vec(struct rte_mbuf** elts, struct xchg** xchg, unsigned n);
-
+void xchg_rx_advance(struct xchg*, struct xchg*** xchgs_p);
 //A packet has been fully received, all flags set, data written, etc. Anything else to do before going to the next one?
-void xchg_finish_packet(struct xchg* xchg);
+void xchg_rx_finish_packet(struct xchg* xchg);
+//This is the last packet of the burst
+void xchg_rx_last_packet(struct xchg* xchg, struct xchg** xchgs);
 
 
 //Read from packet metadata, the name gives it out
@@ -81,22 +78,30 @@ uint16_t xchg_get_outer_l2_len(struct xchg* xchg);
 uint16_t xchg_get_outer_l3_len(struct xchg* xchg);
 uint8_t xchg_get_tsosz(struct xchg* xchg);
 
-
+//Descriptor advancement (advancing in the list/array provided by the user) for TX
 //Peek the next descriptor to be sent.
 struct xchg* xchg_tx_next(struct xchg** xchgs);
-//Returns the number of segments in the packet
-int xchg_nb_segs(struct xchg* xchg);
 //Advance xchgs by one
 void xchg_tx_advance(struct xchg*** xchgs);
 //Return the pointer of the packet buffer data (the real beginning of the packet) from the descriptor
+//An array of packets has been sent, free them. Only called if xchg_do_tx_sent_vec is true.
+//The goal of XCHG is to avoid this kind of double-looping. This is only for backward compatibility, XCHG exchange buffers so we never free the buffer, and especially don't wait to do it in buffer
+void xchg_tx_sent_vec(struct rte_mbuf** elts, struct xchg** xchgs, unsigned n);
+//A packet has been sent. One must free the elements in elts
+void xchg_tx_completed(struct rte_mbuf** elts, unsigned int part, unsigned int olx);
+
+
+
+//Convert a rte_mbuf buffer in the ring to its buffer pointer. As only the user manages those, one usually do a constant shift between the buffer pointer and the size of the rte_mbuf structure
+void* xchg_buffer_from_elt(struct rte_mbuf* buf);
+//Return the buffer (data)
 void* xchg_get_buffer(struct xchg* xchg);
-//Return the buffer address of the pointer
+//Return the buffer address of the pointer (the buffer itself, before the headroom)
 void* xchg_get_buffer_addr(struct xchg* xchg);
 
 //Returns the rte_mbuf backing the buffer of the descriptor
 struct rte_mbuf* xchg_get_mbuf(struct xchg* xchg);
-//A packet has been sent. One must free the elements in elts
-void xchg_tx_completed(struct rte_mbuf** elts, unsigned int part, unsigned int olx);
+
 
 //The packet has been sent inline, so there is no buffer to recover
 void xchg_tx_sent_inline(struct xchg* xchg);

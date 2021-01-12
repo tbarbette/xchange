@@ -42,27 +42,20 @@ int nr = 0;
     //with a packet, and will start reading the next one. It's a chance to wrap up what we
     //need to do.
     //In this case we prefetch the packet data, and set a few Click stuffs.
-    always_inline void xchg_finish_packet(struct xchg* xchg) {
-        //assert(*(get_buf(xchg)->buffer) != 0x21);
+    always_inline void xchg_rx_finish_packet(struct xchg* xchg) {
         rte_prefetch0(get_buf(xchg)->buffer);
-        #if DEBUG_XCHG
-        *(get_buf(xchg)->buffer) = 0x31;
-        #endif
-
     }
 
-    // 0x21 -> RX buffer in elts
-    // 0x31 -> packet to be     processed by app
-    // 0x32 -> packet processed by app
-    // 0x51 -> put in the TX queue
-    // 0x61 -> TX sent
-
+    void xchg_rx_last_packet(struct xchg* xchg, struct xchg** xchgs) {
+        (void)xchg;
+        (void)xchgs;
+    }
 
     /**
      * This function is called by the driver to advance in the RX ring.
      * Set a new buffer to replace in the ring if not canceled, and return the next descriptor
      */
-    always_inline struct xchg* xchg_next(struct rte_mbuf** rep, struct xchg** xchgs, struct rte_mempool* mp) {
+    always_inline struct xchg* xchg_rx_next(struct rte_mbuf** rep, struct xchg** xchgs, struct rte_mempool* mp) {
         struct my_xchg* first = (struct my_xchg*)*xchgs;
         //printf("First %p, xchgs* %p\n",first,xchgs);
 
@@ -78,12 +71,9 @@ int nr = 0;
             fresh_buf = ((uint8_t*)first->buffer) - RTE_PKTMBUF_HEADROOM;
             //assert(*(((uint8_t*)fresh_buf) + RTE_PKTMBUF_HEADROOM) == 0x61);
         }
-#if DEBUG_XCHG
-        *((uint8_t*)fresh_buf + RTE_PKTMBUF_HEADROOM) = 0x21;
-        #endif
+
         //The freshly received buffer with the new packet data
         unsigned char* buffer = ((uint8_t*)*rep) + sizeof(struct rte_mbuf);
-
 
         //We set the address in the ring
         *rep = (struct rte_mbuf*)(((unsigned char*)fresh_buf) - sizeof(struct rte_mbuf));
@@ -98,7 +88,7 @@ int nr = 0;
     /**
      * Cancel the current receiving, this should cancel the last xchg_next.
      */
-    always_inline void xchg_cancel(struct xchg* xchg, struct rte_mbuf* rep) {
+    always_inline void xchg_rx_cancel(struct xchg* xchg, struct rte_mbuf* rep) {
         xchg->buffer = ((unsigned char*)rep) + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM;
         #if DEBUG_XCHG
         *(xchg->buffer) = 0x61;
@@ -109,7 +99,7 @@ int nr = 0;
      * Pops the packet of the user provided buffers
      * Not much to do, the buffer have been already swapped above
      */
-    always_inline void xchg_advance(struct xchg* xchg, struct xchg*** xchgs_p) {
+    always_inline void xchg_rx_advance(struct xchg* xchg, struct xchg*** xchgs_p) {
 
         struct xchg** xchgs = *xchgs_p;
         //printf("Advance! %p = %p -> %p = %p\n",xchgs,*xchgs, xchgs+1,*(xchgs+1));

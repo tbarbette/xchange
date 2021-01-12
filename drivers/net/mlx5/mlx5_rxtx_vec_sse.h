@@ -1053,6 +1053,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	uint64_t comp_idx = MLX5_VPMD_DESCS_PER_LOOP;
 	uint16_t nocmp_n = 0;
 	uint16_t rcvd_pkt = 0;
+	struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
 	unsigned int cq_idx = rxq->cq_ci & q_mask;
 	unsigned int elts_idx;
 	unsigned int ownership = !!(rxq->cq_ci & (q_mask + 1));
@@ -1123,8 +1124,8 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			elts = &(*rxq->elts)[rxq->rq_pi & q_mask];
 
 			for (int i = 0; i < rcvd_pkt; i++) {
-				struct xchg* next = xchg_next(elts, xchgs, rxq->mp);
-				xchg_advance(next, &xchgs);
+				struct xchg* next = xchg_rx_next(elts, xchgs, rxq->mp);
+				xchg_rx_advance(next, &xchgs);
 			}
 			rxq->rq_pi += rcvd_pkt;
 			rxq->decompressed -= rcvd_pkt;
@@ -1207,17 +1208,17 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		/*mbp1 = _mm_loadu_si128((__m128i *)&elts[pos]);
 		mbp2 = _mm_loadu_si128((__m128i *)&elts[pos + 2]);*/
 
-		struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
-			#if defined(__clang__)
-			#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
-			#elif __GNUC_PREREQ(8,0)
-			#pragma GCC unroll 4
-			#endif
+
+		#if defined(__clang__)
+		#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+		#elif __GNUC_PREREQ(8,0)
+		#pragma GCC unroll 4
+		#endif
 		for (int i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 			// pos is accumulated in elts at the end of the loop
-			struct xchg* next = xchg_next(elts + i, xchgs, rxq->mp);
+			struct xchg* next = xchg_rx_next(elts + i, xchgs, rxq->mp);
 			xchgs_vec[i] = next;
-			xchg_advance(next, &xchgs);
+			xchg_rx_advance(next, &xchgs);
 		}
 		/* A.1 load a block having op_own. */
 		p1 = _mm_extract_epi16(p, 1);
@@ -1383,7 +1384,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		 */
 
 		if (unlikely(n != MLX5_VPMD_DESCS_PER_LOOP)) {
-			if (unlikely(n > 0)) {
+			if (unlikely(n > 0)) { //We could send some of the packets
 				#if defined(__clang__)
 				#pragma unroll MLX5_VPMD_DESCS_PER_LOOP - 1
 				#elif __GNUC_PREREQ(8,0)
@@ -1396,8 +1397,9 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 							printf("slow\n");
 							wq->lkey = mlx5_rx_mb2mr(rxq, elts[i]);
 					}
-					xchg_finish_packet(xchgs_vec[i]);
+					xchg_rx_finish_packet(xchgs_vec[i]);
 				}
+				xchg_rx_last_packet(xchgs_vec[n - 1], xchgs);
 			}
 
 			//The packets we received were actually not ready... Rollback!
@@ -1410,18 +1412,19 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 				/*if (n > 0)
 					printf("Cancel %p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci & q_mask,rxq->cq_ci &q_mask);*/
 				struct rte_mbuf* tmp = xchg_get_mbuf(xchgs_vec[i]); //Tmp is the buffer where we should receive something
-				xchg_cancel(xchgs_vec[i], elts[i]);
+				xchg_rx_cancel(xchgs_vec[i], elts[i]);
 				elts[i] = tmp;
 
 			}
-			break;
+			goto shorten;
 		}
+		//All 4 packets are good to go!
 		//printf("Received 4, idx %d!\n",elts_idx + pos);
-			#if defined(__clang__)
-			#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
-			#elif __GNUC_PREREQ(8,0)
-			#pragma GCC unroll 4
-			#endif
+		#if defined(__clang__)
+		#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+		#elif __GNUC_PREREQ(8,0)
+		#pragma GCC unroll 4
+		#endif
 		for (unsigned i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 			//printf("%p -> %p\n", xchgs_vec[i], xchg_get_buffer(xchgs_vec[i]));
 			wq->addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(*elts));
@@ -1429,11 +1432,13 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 					printf("slow\n");
 					wq->lkey = mlx5_rx_mb2mr(rxq, *elts);
 			}
-			xchg_finish_packet(xchgs_vec[i]);
+			xchg_rx_finish_packet(xchgs_vec[i]);
 			++elts;
 			++wq;
 		}
 	}
+	xchg_rx_last_packet(xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP - 1], xchgs);
+	shorten:
 
 	/* If no new CQE seen, return without updating cq_db. */
 	if (unlikely(!nocmp_n && comp_idx == MLX5_VPMD_DESCS_PER_LOOP))
@@ -1477,8 +1482,8 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 				//elts = &(*rxq->elts)[rxq->rq_pi & q_mask]; TODO : rq_pi?
 
 				for (int i = 0; i < rcvd_pkt; i++) {
-					struct xchg* next = xchg_next(elts + i, xchgs, rxq->mp);
-					xchg_advance(next, &xchgs);
+					struct xchg* next = xchg_rx_next(elts + i, xchgs, rxq->mp);
+					xchg_rx_advance(next, &xchgs);
 				}
 
 				rxq->rq_pi += n;

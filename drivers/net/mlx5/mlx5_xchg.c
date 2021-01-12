@@ -93,6 +93,7 @@ mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 	const unsigned int wqe_cnt = (1 << rxq->elts_n) - 1;
 	const unsigned int cqe_cnt = (1 << rxq->cqe_n) - 1;
 	const unsigned int sges_n = rxq->sges_n;
+	struct xchg* xchg;
 
 	volatile struct mlx5_cqe *cqe =
 		&(*rxq->cqes)[rxq->cq_ci & cqe_cnt];
@@ -107,7 +108,7 @@ mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 		volatile struct mlx5_mini_cqe8 *mcqe = NULL;
 		uint32_t rss_hash_res;
         struct rte_mbuf* rep = (*rxq->elts)[idx];
-        struct xchg* xchg = xchg_next(&rep, xchgs, rxq->mp);
+        xchg = xchg_rx_next(&rep, xchgs, rxq->mp);
 		rte_prefetch0(cqe);
 		rte_prefetch0(wqe);
 		if (unlikely(xchg == NULL)) {
@@ -117,10 +118,10 @@ mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
         cqe = &(*rxq->cqes)[rxq->cq_ci & cqe_cnt];
         len = mlx5_rx_poll_len(rxq, cqe, cqe_cnt, &mcqe);
         if (!len) {
-            xchg_cancel(xchg, rep);
+            xchg_rx_cancel(xchg, rep);
             break;
         }
-        xchg_advance(xchg, &xchgs);
+        xchg_rx_advance(xchg, &xchgs);
         MLX5_ASSERT(len >= (rxq->crc_present << 2));
         xchg_clear_flag(xchg, EXT_ATTACHED_MBUF);
         /* If compressed, take hash result from mini-CQE. */
@@ -160,7 +161,9 @@ mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 		/* Increment bytes counter. */
 		rxq->stats.ibytes += xchg_get_len(xchg);
 #endif
-        xchg_finish_packet(xchg);
+        xchg_rx_finish_packet(xchg);
+		//Prefer to call it every time instead of keeping the last xchg
+		xchg_rx_last_packet(xchg, xchgs);
 		/* Return packet. */
 		--pkts_n;
 		++i;
@@ -181,6 +184,7 @@ mlx5_rx_burst_xchg(void *dpdk_rxq, struct xchg **xchgs, uint16_t pkts_n)
 	/* Increment packets counter. */
 	rxq->stats.ipackets += i;
 #endif
+
 	return i;
 }
 

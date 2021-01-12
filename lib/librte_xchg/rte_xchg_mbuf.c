@@ -71,14 +71,19 @@
         return get_buf(xchg)->pkt_len;
     }
 
-    void xchg_finish_packet(struct xchg* xchg) {
+    void xchg_rx_finish_packet(struct xchg* xchg) {
         (void)xchg;
+    }
+
+    void xchg_rx_last_packet(struct xchg* xchg, struct xchg** xchgs) {
+        (void)xchg;
+        (void)xchgs;
     }
 
     /**
      * Take a packet from the ring and replace it by a new one
      */
-    struct xchg* xchg_next(struct rte_mbuf** pkt, struct xchg** xchgs, struct rte_mempool* mp) {
+    struct xchg* xchg_rx_next(struct rte_mbuf** pkt, struct xchg** xchgs, struct rte_mempool* mp) {
         (void) xchgs; //Mbuf is set on advance
         struct rte_mbuf* xchg = *pkt; //Buffer in the ring
 		rte_prefetch0(xchg);
@@ -86,12 +91,12 @@
         return (struct xchg*)xchg;
     }
 
-    void xchg_cancel(struct xchg* xchg, struct rte_mbuf* pkt) {
+    void xchg_rx_cancel(struct xchg* xchg, struct rte_mbuf* pkt) {
         (void)xchg;
         rte_mbuf_raw_free(pkt);
     }
 
-    void xchg_advance(struct xchg* xchg, struct xchg*** xchgs_p) {
+    void xchg_rx_advance(struct xchg* xchg, struct xchg*** xchgs_p) {
         struct xchg** xchgs = *xchgs_p;
         *(xchgs++) = xchg; //Set in the user pointer the buffer from the ring
         *xchgs_p = xchgs;
