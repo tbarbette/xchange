@@ -881,9 +881,9 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 	(void)cq;
 	(void)elts;
 	(void)xchgs;
-	#if 0
+
 	volatile struct mlx5_mini_cqe8 *mcq = (void *)(cq + 1);
-	struct xchg *x_pkt = xchg_next(elts, xchgs, rxq->mp); /* Title packet is pre-built. */
+	struct xchg *x_pkt = xchg_rx_next(elts, xchgs, rxq->mp); /* Title packet is pre-built. */
 	unsigned int pos;
 	unsigned int i;
 	unsigned int inv = 0;
@@ -901,9 +901,10 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			    -1, -1, 14, 15, /* pkt_len, bswap16 */
 			    -1, -1, -1, -1  /* skip packet_type */);
 	/* Restore the compressed count. Must be 16 bits. */
-	const uint16_t mcqe_n = t_pkt->data_len +
+	const uint16_t mcqe_n = xchg_get_data_len(x_pkt) +
 				(rxq->crc_present * RTE_ETHER_CRC_LEN);
-	const __m128i rearm =
+	printf("Have mcqe_n %d\n",mcqe_n);
+	/*const __m128i rearm =
 		_mm_loadu_si128((__m128i *)&t_pkt->rearm_data);
 	const __m128i rxdf =
 		_mm_loadu_si128((__m128i *)&t_pkt->rx_descriptor_fields1);
@@ -913,7 +914,7 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			      0,
 			      rxq->crc_present * RTE_ETHER_CRC_LEN,
 			      0, 0);
-	const uint32_t flow_tag = t_pkt->hash.fdir.hi;
+	const uint32_t flow_tag = t_pkt->hash.fdir.hi;*/
 #ifdef MLX5_PMD_SOFT_COUNTERS
 	const __m128i zero = _mm_setzero_si128();
 	const __m128i ones = _mm_cmpeq_epi32(zero, zero);
@@ -925,6 +926,13 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			     14, 15,  6,  7,
 			     10, 11,  2,  3);
 #endif
+	(void)zero;
+	(void)ones;
+	(void)len_shuf_mask;
+
+
+	(void)shuf_mask1;
+	(void)shuf_mask2;
 
 	/*
 	 * A. load mCQEs into a 128bit register.
@@ -934,10 +942,11 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 	 * E. store flow tag (rte_flow mark).
 	 */
 	for (pos = 0; pos < mcqe_n; ) {
+
 		__m128i mcqe1, mcqe2;
-		__m128i rxdf1, rxdf2;
+		//__m128i rxdf1, rxdf2;
 #ifdef MLX5_PMD_SOFT_COUNTERS
-		__m128i byte_cnt, invalid_mask;
+		//__m128i byte_cnt, invalid_mask;
 #endif
 
 		if (!(pos & 0x7) && pos + 8 < mcqe_n)
@@ -945,6 +954,9 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 		/* A.1 load mCQEs into a 128bit register. */
 		mcqe1 = _mm_loadu_si128((__m128i *)&mcq[pos % 8]);
 		mcqe2 = _mm_loadu_si128((__m128i *)&mcq[pos % 8 + 2]);
+		(void)mcqe1;
+		(void)mcqe2;
+		#if 0
 		/* B.1 store rearm data to mbuf. */
 		_mm_storeu_si128((__m128i *)&elts[pos]->rearm_data, rearm);
 		_mm_storeu_si128((__m128i *)&elts[pos + 1]->rearm_data, rearm);
@@ -963,8 +975,8 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 				  &elts[pos + 1]->rx_descriptor_fields1,
 				 rxdf2);
 		/* B.1 store rearm data to mbuf. */
-		_mm_storeu_si128((__m128i *)&elts[pos + 2]->rearm_data, rearm);
-		_mm_storeu_si128((__m128i *)&elts[pos + 3]->rearm_data, rearm);
+		//_mm_storeu_si128((__m128i *)&elts[pos + 2]->rearm_data, rearm);
+		//_mm_storeu_si128((__m128i *)&elts[pos + 3]->rearm_data, rearm);
 		/* C.1 combine data from mCQEs with rx_descriptor_fields1. */
 		rxdf1 = _mm_shuffle_epi8(mcqe2, shuf_mask1);
 		rxdf2 = _mm_shuffle_epi8(mcqe2, shuf_mask2);
@@ -991,13 +1003,14 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 		byte_cnt = _mm_hadd_epi16(byte_cnt, zero);
 		rcvd_byte += _mm_cvtsi128_si64(_mm_hadd_epi16(byte_cnt, zero));
 #endif
-		if (rxq->mark) {
-			/* E.1 store flow tag (rte_flow mark). */
+#endif
+		/*if (rxq->mark) {
+			// E.1 store flow tag (rte_flow mark).
 			elts[pos]->hash.fdir.hi = flow_tag;
 			elts[pos + 1]->hash.fdir.hi = flow_tag;
 			elts[pos + 2]->hash.fdir.hi = flow_tag;
 			elts[pos + 3]->hash.fdir.hi = flow_tag;
-		}
+		}*/
 		pos += MLX5_VPMD_DESCS_PER_LOOP;
 		/* Move to next CQE and invalidate consumed CQEs. */
 		if (!(pos & 0x7) && pos < mcqe_n) {
@@ -1015,7 +1028,7 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 #endif
 	rxq->cq_ci += mcqe_n;
 	return mcqe_n;
-	#endif
+
 	return 0;
 }
 
@@ -1166,6 +1179,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	//printf("Normal CQs\n");
 	wq =&((volatile struct mlx5_wqe_data_seg *)rxq->wqes)[elts_idx];
 
+	struct xchg* xchg_last;
 	for (pos = 0;
 	     pos < pkts_n;
 	     pos += MLX5_VPMD_DESCS_PER_LOOP) {
@@ -1399,7 +1413,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 					}
 					xchg_rx_finish_packet(xchgs_vec[i]);
 				}
-				xchg_rx_last_packet(xchgs_vec[n - 1], xchgs);
+				xchg_last = xchgs_vec[n - 1];
 			}
 
 			//The packets we received were actually not ready... Rollback!
@@ -1416,7 +1430,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 				elts[i] = tmp;
 
 			}
-			goto shorten;
+			break;
 		}
 		//All 4 packets are good to go!
 		//printf("Received 4, idx %d!\n",elts_idx + pos);
@@ -1436,9 +1450,10 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			++elts;
 			++wq;
 		}
+		xchg_last = xchgs_vec[3];
 	}
-	xchg_rx_last_packet(xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP - 1], xchgs);
-	shorten:
+	xchg_rx_last_packet(xchg_last, xchgs);
+
 
 	/* If no new CQE seen, return without updating cq_db. */
 	if (unlikely(!nocmp_n && comp_idx == MLX5_VPMD_DESCS_PER_LOOP))
