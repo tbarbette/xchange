@@ -132,7 +132,10 @@ struct mlx5_rxq_data {
 	uint16_t rq_repl_thresh; /* Threshold for buffer replenishment. */
 	union {
 		struct rxq_zip zip; /* Compressed context. */
-		uint16_t decompressed;
+		struct {
+			uint16_t decompressed;
+			uint16_t current;
+		};
 		/* Number of ready mbufs decompressed from the CQ. */
 	};
 	struct mlx5_mr_ctrl mr_ctrl; /* MR control descriptor. */
