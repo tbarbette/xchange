@@ -17,8 +17,12 @@
 #include "main.h"
 
 #define always_inline __rte_always_inline
-int nr = 0;
-//RX and common
+
+    //In this application, we represent bursts of packets as vectors (as opposed to something opaque, like a LL)
+    bool xchg_is_vec = true;
+
+    //RX and common
+
 
 	/**
      * An internal helper to cast the xchg* pointer to the WritablePacket* pointer.
@@ -29,6 +33,7 @@ int nr = 0;
 
     //Set data_length (the actual packet length)
     always_inline void xchg_set_data_len(struct xchg* xchg, uint16_t len) {
+        //fprintf(stderr, "Setting length of %p to %d\n",xchg,len);
         get_buf(xchg)->plen = len;
     }
 
@@ -90,9 +95,6 @@ int nr = 0;
      */
     always_inline void xchg_rx_cancel(struct xchg* xchg, struct rte_mbuf* rep) {
         xchg->buffer = ((unsigned char*)rep) + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM;
-        #if DEBUG_XCHG
-        *(xchg->buffer) = 0x61;
-        #endif
     }
 
     /**
@@ -167,7 +169,6 @@ int nr = 0;
     // The packet was sent always_inline, therefore no buffer is set up in the ring to be recovered later
     always_inline void xchg_tx_sent_inline(struct xchg* xchg) {
         #if DEBUG_XCHG
-        *(get_tx_buf(xchg)->buffer) = 0x61;
         #endif
     }
 
@@ -182,8 +183,7 @@ int nr = 0;
          {
             get_tx_buf(*xchgs)->buffer = ((uint8_t*)tmp) + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM;
             #if DEBUG_XCHG
-            *(get_tx_buf(*xchgs)->buffer) = 0x61;
-             #endif
+            #endif
          }
          //printf("Sent normal %p->%p\n", *xchgs, get_tx_buf(*xchgs)->buffer);
          *elts = mbuf;

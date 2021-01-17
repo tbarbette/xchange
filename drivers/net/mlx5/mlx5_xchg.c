@@ -1562,7 +1562,7 @@ mlx5_tx_xchg_handle_completion(struct mlx5_txq_data *restrict txq,
 			 */
 			rte_wmb();
 			txq->cq_ci = ci;
-			txq->elts_tail = txq->elts_head + 1;
+			txq->elts_tail = txq->elts_head - (1 << txq->cqe_n) - 1; //XCHG always maintain a full ELTS
 			ret = mlx5_tx_error_cqe_handle
 				(txq, (volatile struct mlx5_err_cqe *)cqe);
 			if (unlikely(ret < 0)) {

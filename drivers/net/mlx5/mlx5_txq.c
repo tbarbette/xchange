@@ -82,10 +82,13 @@ txq_free_elts(struct mlx5_txq_ctrl *txq_ctrl)
 	txq_ctrl->txq.elts_comp = 0;
 
 	while (elts_tail != elts_head) {
+		printf("Free %d\n", elts_tail);
 		struct rte_mbuf *elt = (*elts)[elts_tail & elts_m];
 
-		if (elt == NULL)
+		if (elt == NULL) {
+			++elts_tail;
 			continue;
+		}
 		rte_pktmbuf_free_seg(elt);
 #ifdef RTE_LIBRTE_MLX5_DEBUG
 		/* Poisoning. */

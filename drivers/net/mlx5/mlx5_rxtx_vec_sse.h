@@ -888,16 +888,10 @@ rxq_cq_to_ptype_oflags_v_xchg(struct mlx5_rxq_data *rxq, __m128i cqes[4],
  * @return
  *   Number of mini-CQEs successfully decompressed.
  */
-static inline uint16_t
+static __rte_always_inline uint16_t
 rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq,
-		    struct rte_mbuf** elts, volatile struct mlx5_wqe_data_seg * wq, struct xchg **xchgs, uint16_t pkts_n)
+		    struct rte_mbuf** elts, volatile struct mlx5_wqe_data_seg * wq, struct xchg ***xchgs, uint16_t pkts_n)
 {
-	(void)rxq;
-	(void)cq;
-	(void)elts;
-	(void)xchgs;
-
-	//struct xchg *x_pkt = xchg_rx_next(elts, xchgs, rxq->mp); /* Title packet is pre-built. */
 	unsigned int pos;
 	unsigned int i;
 	unsigned int inv = 0;
@@ -979,8 +973,6 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 	 * E. store flow tag (rte_flow mark).
 	 */
 
-
-
 	struct xchg* xchg_last = 0;
 	pos = 0;
 	while (pos < pkts_n) {
@@ -1014,11 +1006,11 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			}
 
 			// pos is accumulated in elts at the end of the loop
-			struct xchg* next = xchg_rx_next(elts + pos + i, xchgs, rxq->mp);
+			struct xchg* next = xchg_rx_next(elts + pos + i, *xchgs, rxq->mp);
 
 			//fprintf(stderr, "CQ Next have now buffer %p:%p -> %x, elts is %p\n",next, xchg_get_buffer_addr(next), *(((unsigned char*)xchg_get_buffer_addr(next)) + 128), ((unsigned char*)elts[pos + i]) +128 );
 			xchgs_vec[i] = next;
-			xchg_rx_advance(next, &xchgs);
+			xchg_rx_advance(next, xchgs);
 
 			uint32_t b = rte_be_to_cpu_32(mcq[pos % 8 + i].byte_cnt);
 			xchg_set_data_len(xchgs_vec[i], b);
@@ -1103,7 +1095,8 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 		}
 	}
 
-	xchg_rx_last_packet(xchg_last, xchgs);
+	xchg_rx_last_packet(xchg_last, *xchgs);
+
 	/* Invalidate the rest of CQEs. */
 	for (; inv < pkts_n; ++inv)
 		cq[inv].op_own = MLX5_CQE_INVALIDATE;
@@ -1117,12 +1110,10 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 	rxq->rq_ci += pkts_n;
 
 	if (rxq->decompressed == 0) {
-
 		rte_compiler_barrier();
 		*rxq->cq_db = rte_cpu_to_be_32(rxq->cq_ci);
 		rte_cio_wmb();
 		*rxq->rq_db = rte_cpu_to_be_32(rxq->rq_ci);
-
 	}
 	return pkts_n;
 
@@ -1160,7 +1151,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	uint16_t rcvd_pkt = 0;
 	volatile struct mlx5_cqe *cq;
 	volatile struct mlx5_wqe_data_seg *wq;
-
+decomp:
 	elts_idx = rxq->rq_ci & q_mask;
 	elts = &(*rxq->elts)[elts_idx];
 	cq_idx = rxq->cq_ci & q_mask;
@@ -1168,15 +1159,17 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	wq =&((volatile struct mlx5_wqe_data_seg *)rxq->wqes)[elts_idx];
 
 	if (comp_enabled && rxq->decompressed) {
-		//fprintf( stderr,"Should recover %d \n",rxq->decompressed);
+		//fprintf( stderr,"Should recover %d, can receive %d\n", rxq->decompressed, pkts_n);
 
 		//assert((rxq->rq_ci & q_mask) + (pkts_n<rxq->decompressed?pkts_n:rxq->decompressed) <= q_n);
-		rcvd_pkt = rxq_cq_decompress_v_xchg(rxq, cq ,
-								elts,wq,xchgs,pkts_n);
-		pkts_n -= rcvd_pkt;
+		unsigned dec = rxq_cq_decompress_v_xchg(rxq, cq ,
+								elts,wq,&xchgs,pkts_n);
+		//fprintf(stderr, "Received from deq %d\n", dec);
+		rcvd_pkt += dec;
+		pkts_n -= dec;
 		//We continue if we don't have any compressed packets left, and if there is room for at least 4 packets
 		if (!rxq->decompressed && pkts_n >= MLX5_VPMD_DESCS_PER_LOOP) {
-			//printf("Still have some space for %d packets\n",pkts_n);
+			//fprintf(stderr, "Still have some space for %d packets\n",pkts_n);
 			elts_idx = rxq->rq_ci & q_mask;
 			elts = &(*rxq->elts)[elts_idx];
 			cq_idx = rxq->cq_ci & q_mask;
@@ -1192,7 +1185,12 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	uint64_t comp_idx = MLX5_VPMD_DESCS_PER_LOOP;
 	uint16_t nocmp_n = 0;
 
-	struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
+	struct xchg** xchgs_vec;
+	struct xchg* xchgs_vec_novec[MLX5_VPMD_DESCS_PER_LOOP];
+	if (!xchg_is_vec)
+		xchgs_vec = xchgs_vec_novec;
+	else
+		xchgs_vec = xchgs;
 
 	unsigned int ownership = !!(rxq->cq_ci & (q_mask + 1));
 	const __m128i owner_check =
@@ -1215,6 +1213,7 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 
 	/* Mask to shuffle from extracted CQE to mbuf. */
 	#if 0
+	//Not yet done... A bit more thinking to do :p
 	const __m128i shuf_mask =
 		_mm_set_epi8(-1,  xchg_fdir_off()>-1?xchg_fdir_off() + 2:-1,  xchg_fdir_off()>-1?xchg_fdir_off() + 1:-1,  xchg_fdir_off(), /* fdir.hi */
 			    xchg_rss_off(), xchg_rss_off()> -1?xchg_rss_off() + 1 : -1, xchg_rss_off()> -1?xchg_rss_off() + 2 : -1, xchg_rss_off()> -1?xchg_rss_off() + 3 : -1, /* rss, bswap32 */
@@ -1248,9 +1247,6 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	rte_prefetch0(cq + 2);
 	rte_prefetch0(cq + 3);
 	pkts_n = RTE_MIN(pkts_n, MLX5_VPMD_RX_MAX_BURST);
-
-	elts_idx = rxq->rq_ci & q_mask;
-	elts = &(*rxq->elts)[elts_idx];
 
 	/* Not to overflow pkts array. */
 	pkts_n = RTE_ALIGN_FLOOR(pkts_n, MLX5_VPMD_DESCS_PER_LOOP);
@@ -1335,7 +1331,8 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			// pos is accumulated in elts at the end of the loop
 			struct xchg* next = xchg_rx_next(elts + i, xchgs, rxq->mp);
 			//fprintf(stderr, "Next have now buffer %p:%p -> %x, elts is %p\n",next, xchg_get_buffer_addr(next), *(((unsigned char*)xchg_get_buffer_addr(next)) + 128), ((unsigned char*)elts[i]) +128 );
-			xchgs_vec[i] = next;
+			if (!xchg_is_vec)
+				xchgs_vec[i] = next;
 			xchg_rx_advance(next, &xchgs);
 		}
 		/* A.1 load a block having op_own. */
@@ -1525,9 +1522,15 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 				}
 				wq+=n;
 				xchg_last = xchgs_vec[n - 1];
-				*xchgs = xchgs_vec[n];
+				if (xchg_is_vec)
+					xchgs = &xchgs_vec[n];
+				else
+					*xchgs = xchgs_vec[n];
 			} else
-				*xchgs = xchgs_vec[0];
+				if (xchg_is_vec)
+					xchgs = &xchgs_vec[0];
+				else
+					*xchgs = xchgs_vec[0];
 
 			//The packets we received were actually not ready... Rollback!
 			#if defined(__clang__)
@@ -1568,6 +1571,8 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			++wq;
 		}
 		xchg_last = xchgs_vec[3];
+		if (xchg_is_vec)
+			xchgs_vec+=MLX5_VPMD_DESCS_PER_LOOP;
 	}
 
 
@@ -1598,20 +1603,17 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	rxq->stats.ibytes += rcvd_byte;
 #endif
 	if (comp_enabled && comp_idx < MLX5_VPMD_DESCS_PER_LOOP && comp_idx == n) {
-			//*xchgs = xchg_last;
-			//xchg_rx_advance(xchg_last, &xchgs);
 			pkts_n -= nocmp_n;
 			//fprintf( stderr,"Decompressing CQs... CQ %d, max %d\n",nocmp_n, pkts_n);
-			rxq->decompressed= rte_be_to_cpu_32(cq[nocmp_n].byte_cnt);
-			elts_idx = rxq->rq_ci & q_mask;
-			elts = &(*rxq->elts)[elts_idx];
-			if (likely(pkts_n > 7 || (pkts_n >= rxq->decompressed))) {
-				MLX5_ASSERT(comp_idx == (nocmp_n % MLX5_VPMD_DESCS_PER_LOOP));
-				rcvd_pkt += rxq_cq_decompress_v_xchg(rxq, &cq[nocmp_n],
-									elts,wq,xchgs,pkts_n);
-				return rcvd_pkt;
-			}
+			rxq->decompressed = rte_be_to_cpu_32(cq[nocmp_n].byte_cnt);
+			if (likely(pkts_n > 7 || pkts_n >= rxq->decompressed))
+				goto decomp;
 	}
+	/*
+	else {
+		if (nocmp_n > 0)
+			fprintf( stderr,"Received %d, no compressed\n",nocmp_n);
+	}*/
 
 	if (likely(nocmp_n))
 		xchg_rx_last_packet(xchg_last, xchgs);
