@@ -1,5 +1,7 @@
 #include <rte_xchg.h>
 
+    bool xchg_is_vec = true;
+
 
     inline struct rte_mbuf* get_buf(struct xchg* x) {
         return (struct rte_mbuf*)x;
@@ -111,8 +113,6 @@
         (void)part;
         (void)olx;
     }
-
-
 
     struct xchg* xchg_tx_next(struct xchg** xchgs) {
         struct rte_mbuf** pkts = (struct rte_mbuf**)xchgs;

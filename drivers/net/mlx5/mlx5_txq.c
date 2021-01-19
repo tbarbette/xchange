@@ -53,6 +53,7 @@ txq_alloc_elts(struct mlx5_txq_ctrl *txq_ctrl)
 		txq_ctrl->txq.elts[i] = NULL;
 	DRV_LOG(DEBUG, "port %u Tx queue %u allocated and configured %u WRs",
 		PORT_ID(txq_ctrl->priv), txq_ctrl->txq.idx, elts_n);
+		//fprintf(stderr,"Alloc elts\n");
 	txq_ctrl->txq.elts_head = 0;
 	txq_ctrl->txq.elts_tail = 0;
 	txq_ctrl->txq.elts_comp = 0;
@@ -69,6 +70,7 @@ txq_free_elts(struct mlx5_txq_ctrl *txq_ctrl)
 {
 	const uint16_t elts_n = 1 << txq_ctrl->txq.elts_n;
 	const uint16_t elts_m = elts_n - 1;
+	fprintf(stderr,"FREE ELTS!!!!!!!!!!!!!!!!!!!!\n");
 	uint16_t elts_head = txq_ctrl->txq.elts_head;
 	uint16_t elts_tail = txq_ctrl->txq.elts_tail;
 	struct rte_mbuf *(*elts)[elts_n] = &txq_ctrl->txq.elts;
@@ -80,9 +82,13 @@ txq_free_elts(struct mlx5_txq_ctrl *txq_ctrl)
 	txq_ctrl->txq.elts_comp = 0;
 
 	while (elts_tail != elts_head) {
+		printf("Free %d\n", elts_tail);
 		struct rte_mbuf *elt = (*elts)[elts_tail & elts_m];
 
-		MLX5_ASSERT(elt != NULL);
+		if (elt == NULL) {
+			++elts_tail;
+			continue;
+		}
 		rte_pktmbuf_free_seg(elt);
 #ifdef RTE_LIBRTE_MLX5_DEBUG
 		/* Poisoning. */
@@ -1400,6 +1406,7 @@ mlx5_txq_release(struct rte_eth_dev *dev, uint16_t idx)
 	if (txq->obj && !mlx5_txq_obj_release(txq->obj))
 		txq->obj = NULL;
 	if (rte_atomic32_dec_and_test(&txq->refcnt)) {
+		fprintf(stderr,"TXQ RELEASE!!!\n");
 		txq_free_elts(txq);
 		mlx5_mr_btree_free(&txq->txq.mr_ctrl.cache_bh);
 		LIST_REMOVE(txq, next);

@@ -1297,28 +1297,13 @@ next_empw:
 			slen += dlen;
 #endif
 
-            //printf("Sending %p, buffer %p",loc->next, xchg_get_buffer(loc->next));
+           // fprintf(stderr,"ASending %p, buffer %p, elts head %d\n",loc->next, xchg_get_buffer(loc->next), txq->elts_head);
 			mlx5_tx_xchg_dseg_ptr
 				(txq, loc, dseg,
 				 xchg_get_buffer(loc->next),
 				 dlen, olx);
 
-			//--loc->elts_free;
             if (!xchg_elts_vec)  {
-/*                	struct rte_mbuf **elts = (struct rte_mbuf **)txq->elts;
-	                unsigned partr = txq->elts_s - (txq->elts_head & txq->elts_m);
-	                assert(partr);
-                    unsigned n = RTE_MIN(partr, (unsigned)1);
-                    assert(n == 1);
-                    xchg_tx_sent_vec(elts + ((txq->elts_head + loc->pkts_sent + ns  ) & txq->elts_m),
-            		   loc->xchgs,
-            		   n);
-                    ns++;
-//                    txq->elts_head += 1;
-
-            assert(*loc->xchgs == (struct xchg*) 0x87);
-            }*/
-
                  xchg_tx_sent(&txq->elts[txq->elts_head++ & txq->elts_m], loc->xchgs);
 		}
 
@@ -1577,6 +1562,7 @@ mlx5_tx_xchg_handle_completion(struct mlx5_txq_data *restrict txq,
 			 */
 			rte_wmb();
 			txq->cq_ci = ci;
+			txq->elts_tail = txq->elts_head - (1 << txq->cqe_n) - 1; //XCHG always maintain a full ELTS
 			ret = mlx5_tx_error_cqe_handle
 				(txq, (volatile struct mlx5_err_cqe *)cqe);
 			if (unlikely(ret < 0)) {

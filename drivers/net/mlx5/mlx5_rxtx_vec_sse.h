@@ -858,9 +858,24 @@ rxq_cq_to_ptype_oflags_v_xchg(struct mlx5_rxq_data *rxq, __m128i cqes[4],
 }
 
 
-/**
- * Decompress a compressed completion and fill in mbufs in RX SW ring with data
- * extracted from the title completion descriptor.
+/***
+ * Compressed CQE allow to write 8 mini CQE in one CQE. Then, 7 CQEs are skipped, so that
+ * ease PCIe and memory.
+ *
+ * A compressed CQE has the last field (MLX5_CQE_FORMAT(op_own)) set to a specific value, MLX5_COMPRESSED
+ *
+ * The number of actual  total number mini cqes is set as the byte count of the normal CQEs
+ * zip->cqe_cnt = rte_be_to_cpu_32(cqe->byte_cnt);
+ * Then one, knows there are up to 8 "mini" CQEs (mlx5_mini_cqe8) to find in the next CQE.
+ * Then 6 empty CQE.
+ * Then, if cqe was bigger than 8, up to 8 mini CQE again.
+ *
+ * Therefore, all miniCQE are not always at the same place, as for the first one one
+ * must pass the "header" CQE.
+ *
+ * Also, it appears CQE never wraps around the queue. So if the NIC says there's 48 mini CQE
+ * then we know we don't have to mask the index up to the end. This explains why this function is MUCH
+ * more simple than the generic one.
  *
  * @param rxq
  *   Pointer to RX queue structure.
@@ -873,21 +888,15 @@ rxq_cq_to_ptype_oflags_v_xchg(struct mlx5_rxq_data *rxq, __m128i cqes[4],
  * @return
  *   Number of mini-CQEs successfully decompressed.
  */
-static inline uint16_t
+static __rte_always_inline uint16_t
 rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq,
-		    struct rte_mbuf** elts, struct xchg **xchgs)
+		    struct rte_mbuf** elts, volatile struct mlx5_wqe_data_seg * wq, struct xchg ***xchgs, uint16_t pkts_n)
 {
-	(void)rxq;
-	(void)cq;
-	(void)elts;
-	(void)xchgs;
-
-	volatile struct mlx5_mini_cqe8 *mcq = (void *)(cq + 1);
-	struct xchg *x_pkt = xchg_rx_next(elts, xchgs, rxq->mp); /* Title packet is pre-built. */
 	unsigned int pos;
 	unsigned int i;
 	unsigned int inv = 0;
 	/* Mask to shuffle from extracted mini CQE to mbuf. */
+	#if 0
 	const __m128i shuf_mask1 =
 		_mm_set_epi8(0,  1,  2,  3, /* rss, bswap32 */
 			    -1, -1,         /* skip vlan_tci */
@@ -900,10 +909,12 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			    14, 15,         /* data_len, bswap16 */
 			    -1, -1, 14, 15, /* pkt_len, bswap16 */
 			    -1, -1, -1, -1  /* skip packet_type */);
+				#endif
 	/* Restore the compressed count. Must be 16 bits. */
-	const uint16_t mcqe_n = xchg_get_data_len(x_pkt) +
-				(rxq->crc_present * RTE_ETHER_CRC_LEN);
-	printf("Have mcqe_n %d\n",mcqe_n);
+	//const uint16_t mcqe_n = xchg_get_data_len(x_pkt) +
+	//(rxq->crc_present * RTE_ETHER_CRC_LEN);
+	const uint16_t mcqe_n = rxq->decompressed;
+	//fprintf( stderr,"Have mcqe_n %d or %d, xchg %p, current %d, cq %p, rq %d, max pkts %d\n",mcqe_n,rte_be_to_cpu_32(cq->byte_cnt), *xchgs, rxq->current, cq, rxq->rq_ci,pkts_n);
 	/*const __m128i rearm =
 		_mm_loadu_si128((__m128i *)&t_pkt->rearm_data);
 	const __m128i rxdf =
@@ -915,24 +926,44 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 			      rxq->crc_present * RTE_ETHER_CRC_LEN,
 			      0, 0);
 	const uint32_t flow_tag = t_pkt->hash.fdir.hi;*/
-#ifdef MLX5_PMD_SOFT_COUNTERS
-	const __m128i zero = _mm_setzero_si128();
-	const __m128i ones = _mm_cmpeq_epi32(zero, zero);
 	uint32_t rcvd_byte = 0;
-	/* Mask to shuffle byte_cnt to add up stats. Do bswap16 for all. */
+#ifdef MLX5_PMD_SOFT_COUNTERS
+/*	const __m128i zero = _mm_setzero_si128();
+	const __m128i ones = _mm_cmpeq_epi32(zero, zero);
+
+	// Mask to shuffle byte_cnt to add up stats. Do bswap16 for all.
 	const __m128i len_shuf_mask =
 		_mm_set_epi8(-1, -1, -1, -1,
 			     -1, -1, -1, -1,
 			     14, 15,  6,  7,
-			     10, 11,  2,  3);
+			     10, 11,  2,  3);*/
 #endif
-	(void)zero;
+	/*(void)zero;
 	(void)ones;
-	(void)len_shuf_mask;
+	(void)len_shuf_mask;*/
 
 
-	(void)shuf_mask1;
-	(void)shuf_mask2;
+	/*(void)shuf_mask1;
+	(void)shuf_mask2;*/
+
+	volatile struct mlx5_mini_cqe8 *mcq;
+	if (rxq->current) {
+		mcq = (void *)(cq) ;
+	} else
+		mcq = (void *)(cq + 1);
+
+	//Don't eat more than we can
+	if (pkts_n >= mcqe_n) {
+		pkts_n = mcqe_n;
+		rxq->decompressed = 0;
+		rxq->current = 0;
+	} else {
+		pkts_n = pkts_n & ~7; //We cannot leave a hole in the MCQE
+		//fprintf( stderr,"Will receive only %d out of %d\n", pkts_n, mcqe_n);
+		rxq->decompressed = mcqe_n - pkts_n;
+		rxq->current += pkts_n;
+	}
+
 
 	/*
 	 * A. load mCQEs into a 128bit register.
@@ -941,9 +972,13 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 	 * D. store rx_descriptor_fields1.
 	 * E. store flow tag (rte_flow mark).
 	 */
-	for (pos = 0; pos < mcqe_n; ) {
 
-		__m128i mcqe1, mcqe2;
+	struct xchg* xchg_last = 0;
+	pos = 0;
+	while (pos < pkts_n) {
+
+		//__m128i mcqe1, mcqe2;
+		struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
 		//__m128i rxdf1, rxdf2;
 #ifdef MLX5_PMD_SOFT_COUNTERS
 		//__m128i byte_cnt, invalid_mask;
@@ -952,10 +987,49 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 		if (!(pos & 0x7) && pos + 8 < mcqe_n)
 			rte_prefetch0((void *)(cq + pos + 8));
 		/* A.1 load mCQEs into a 128bit register. */
-		mcqe1 = _mm_loadu_si128((__m128i *)&mcq[pos % 8]);
+		/*mcqe1 = _mm_loadu_si128((__m128i *)&mcq[pos % 8]);
 		mcqe2 = _mm_loadu_si128((__m128i *)&mcq[pos % 8 + 2]);
 		(void)mcqe1;
 		(void)mcqe2;
+*/
+
+		#if defined(__clang__)
+		#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
+		#elif __GNUC_PREREQ(8,0)
+		#pragma GCC unroll 4
+		#endif
+		for (int i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
+			//fprintf( stderr,"Size %d for pos %d, xchg top %p\n", rte_be_to_cpu_32(mcq[pos % 8 + i].byte_cnt), pos +i, *xchgs);
+			if (pos + i == pkts_n) {
+				xchg_last = xchgs_vec[i - 1];
+				goto split;
+			}
+
+			// pos is accumulated in elts at the end of the loop
+			struct xchg* next = xchg_rx_next(elts + pos + i, *xchgs, rxq->mp);
+
+			//fprintf(stderr, "CQ Next have now buffer %p:%p -> %x, elts is %p\n",next, xchg_get_buffer_addr(next), *(((unsigned char*)xchg_get_buffer_addr(next)) + 128), ((unsigned char*)elts[pos + i]) +128 );
+			xchgs_vec[i] = next;
+			xchg_rx_advance(next, xchgs);
+
+			uint32_t b = rte_be_to_cpu_32(mcq[pos % 8 + i].byte_cnt);
+			xchg_set_data_len(xchgs_vec[i], b);
+			rcvd_byte+= b;
+
+
+			xchg_rx_finish_packet(xchgs_vec[i]);
+			wq[pos + i].addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(elts[pos + i]));
+			if (unlikely(mlx5_mr_btree_len(&rxq->mr_ctrl.cache_bh) > 1)) {
+					//fprintf( stderr,"slow\n");
+					wq->lkey = mlx5_rx_mb2mr(rxq, elts[pos + i]);
+			}
+
+
+		}
+		xchg_last = xchgs_vec[3];
+		split:
+
+
 		#if 0
 		/* B.1 store rearm data to mbuf. */
 		_mm_storeu_si128((__m128i *)&elts[pos]->rearm_data, rearm);
@@ -1013,23 +1087,36 @@ rxq_cq_decompress_v_xchg(struct mlx5_rxq_data *rxq, volatile struct mlx5_cqe *cq
 		}*/
 		pos += MLX5_VPMD_DESCS_PER_LOOP;
 		/* Move to next CQE and invalidate consumed CQEs. */
-		if (!(pos & 0x7) && pos < mcqe_n) {
+		if (!(pos & 0x7) && pos < pkts_n) {
+		//	fprintf( stderr,"NOT FINISHED\n");
 			mcq = (void *)(cq + pos);
 			for (i = 0; i < 8; ++i)
 				cq[inv++].op_own = MLX5_CQE_INVALIDATE;
 		}
 	}
+
+	xchg_rx_last_packet(xchg_last, *xchgs);
+
 	/* Invalidate the rest of CQEs. */
-	for (; inv < mcqe_n; ++inv)
+	for (; inv < pkts_n; ++inv)
 		cq[inv].op_own = MLX5_CQE_INVALIDATE;
+
+//	fprintf( stderr,"Next CQ should be %p\n", cq + pos);
 #ifdef MLX5_PMD_SOFT_COUNTERS
-	rxq->stats.ipackets += mcqe_n;
+	rxq->stats.ipackets += pkts_n;
 	rxq->stats.ibytes += rcvd_byte;
 #endif
-	rxq->cq_ci += mcqe_n;
-	return mcqe_n;
+	rxq->cq_ci += pkts_n;
+	rxq->rq_ci += pkts_n;
 
-	return 0;
+	if (rxq->decompressed == 0) {
+		rte_compiler_barrier();
+		*rxq->cq_db = rte_cpu_to_be_32(rxq->cq_ci);
+		rte_cio_wmb();
+		*rxq->rq_db = rte_cpu_to_be_32(rxq->rq_ci);
+	}
+	return pkts_n;
+
 }
 
 
@@ -1055,20 +1142,56 @@ static __rte_always_inline uint16_t
 rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n,
 	    uint64_t *err, int comp_enabled)
 {
+	//fprintf( stderr,"Entering XCHG with %p\n",*xchgs);
+	struct rte_mbuf **elts;
 	const uint16_t q_n = 1 << rxq->cqe_n;
 	const uint16_t q_mask = q_n - 1;
+	unsigned int cq_idx ;
+	unsigned int elts_idx;
+	uint16_t rcvd_pkt = 0;
 	volatile struct mlx5_cqe *cq;
-	struct rte_mbuf **elts;
 	volatile struct mlx5_wqe_data_seg *wq;
+decomp:
+	elts_idx = rxq->rq_ci & q_mask;
+	elts = &(*rxq->elts)[elts_idx];
+	cq_idx = rxq->cq_ci & q_mask;
+	cq = &(*rxq->cqes)[cq_idx];
+	wq =&((volatile struct mlx5_wqe_data_seg *)rxq->wqes)[elts_idx];
+
+	if (comp_enabled && rxq->decompressed) {
+		//fprintf( stderr,"Should recover %d, can receive %d\n", rxq->decompressed, pkts_n);
+
+		//assert((rxq->rq_ci & q_mask) + (pkts_n<rxq->decompressed?pkts_n:rxq->decompressed) <= q_n);
+		unsigned dec = rxq_cq_decompress_v_xchg(rxq, cq ,
+								elts,wq,&xchgs,pkts_n);
+		//fprintf(stderr, "Received from deq %d\n", dec);
+		rcvd_pkt += dec;
+		pkts_n -= dec;
+		//We continue if we don't have any compressed packets left, and if there is room for at least 4 packets
+		if (!rxq->decompressed && pkts_n >= MLX5_VPMD_DESCS_PER_LOOP) {
+			//fprintf(stderr, "Still have some space for %d packets\n",pkts_n);
+			elts_idx = rxq->rq_ci & q_mask;
+			elts = &(*rxq->elts)[elts_idx];
+			cq_idx = rxq->cq_ci & q_mask;
+			cq = &(*rxq->cqes)[cq_idx];
+			wq =&((volatile struct mlx5_wqe_data_seg *)rxq->wqes)[elts_idx];
+		} else {
+			return rcvd_pkt;
+		}
+	}
 	unsigned int pos;
 	uint64_t n;
 	//uint16_t repl_n;
 	uint64_t comp_idx = MLX5_VPMD_DESCS_PER_LOOP;
 	uint16_t nocmp_n = 0;
-	uint16_t rcvd_pkt = 0;
-	struct xchg* xchgs_vec[MLX5_VPMD_DESCS_PER_LOOP];
-	unsigned int cq_idx = rxq->cq_ci & q_mask;
-	unsigned int elts_idx;
+
+	struct xchg** xchgs_vec;
+	struct xchg* xchgs_vec_novec[MLX5_VPMD_DESCS_PER_LOOP];
+	if (!xchg_is_vec)
+		xchgs_vec = xchgs_vec_novec;
+	else
+		xchgs_vec = xchgs;
+
 	unsigned int ownership = !!(rxq->cq_ci & (q_mask + 1));
 	const __m128i owner_check =
 		_mm_set_epi64x(0x0100000001000000LL, 0x0100000001000000LL);
@@ -1087,8 +1210,10 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			     12, 13,  8,  9,
 			      4,  5,  0,  1);
 #endif
+
 	/* Mask to shuffle from extracted CQE to mbuf. */
 	#if 0
+	//Not yet done... A bit more thinking to do :p
 	const __m128i shuf_mask =
 		_mm_set_epi8(-1,  xchg_fdir_off()>-1?xchg_fdir_off() + 2:-1,  xchg_fdir_off()>-1?xchg_fdir_off() + 1:-1,  xchg_fdir_off(), /* fdir.hi */
 			    xchg_rss_off(), xchg_rss_off()> -1?xchg_rss_off() + 1 : -1, xchg_rss_off()> -1?xchg_rss_off() + 2 : -1, xchg_rss_off()> -1?xchg_rss_off() + 3 : -1, /* rss, bswap32 */
@@ -1116,46 +1241,21 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 
 	MLX5_ASSERT(rxq->sges_n == 0);
 	MLX5_ASSERT(rxq->cqe_n == rxq->elts_n);
-	cq = &(*rxq->cqes)[cq_idx];
+
 	rte_prefetch0(cq);
 	rte_prefetch0(cq + 1);
 	rte_prefetch0(cq + 2);
 	rte_prefetch0(cq + 3);
 	pkts_n = RTE_MIN(pkts_n, MLX5_VPMD_RX_MAX_BURST);
-	//repl_n = q_n - (rxq->rq_ci - rxq->rq_pi); //always uncompress to pkts
-
-	/* See if there're unreturned mbufs from compressed CQE. */
-	if (comp_enabled) {
-		rcvd_pkt = rxq->decompressed;
-
-		// Receive remaining decompressed pkts
-		if (rcvd_pkt > 0) {
-			printf("Rcv from decompressed %d\n", rcvd_pkt);
-			rcvd_pkt = RTE_MIN(rcvd_pkt, pkts_n);
-
-			const uint16_t q_mask = (1 << rxq->elts_n) - 1;
-			elts = &(*rxq->elts)[rxq->rq_pi & q_mask];
-
-			for (int i = 0; i < rcvd_pkt; i++) {
-				struct xchg* next = xchg_rx_next(elts, xchgs, rxq->mp);
-				xchg_rx_advance(next, &xchgs);
-			}
-			rxq->rq_pi += rcvd_pkt;
-			rxq->decompressed -= rcvd_pkt;
-		}
-	}
-	elts_idx = rxq->rq_ci & q_mask;
-	elts = &(*rxq->elts)[elts_idx];
 
 	/* Not to overflow pkts array. */
-	pkts_n = RTE_ALIGN_FLOOR(pkts_n - rcvd_pkt, MLX5_VPMD_DESCS_PER_LOOP);
+	pkts_n = RTE_ALIGN_FLOOR(pkts_n, MLX5_VPMD_DESCS_PER_LOOP);
 	/* Not to cross queue end. */
 	pkts_n = RTE_MIN(pkts_n, q_n - elts_idx);
 	pkts_n = RTE_MIN(pkts_n, q_n - cq_idx);
 	if (!pkts_n)
 		return rcvd_pkt;
-	/* At this point, there shouldn't be any remained packets. */
-	MLX5_ASSERT(rxq->decompressed == 0);
+
 	/*
 	 * A. load first Qword (8bytes) in one loop.
 	 * B. copy 4 mbuf pointers from elts ring to returing pkts. --> swap 4 buffers from user to elts
@@ -1176,14 +1276,13 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	 * E. get valid CQEs.
 	 * F. find compressed CQE.
 	 */
-	//printf("Normal CQs\n");
-	wq =&((volatile struct mlx5_wqe_data_seg *)rxq->wqes)[elts_idx];
+	//fprintf( stderr,"Normal CQs\n");
 
-	struct xchg* xchg_last;
+	struct xchg* xchg_last = 0;
 	for (pos = 0;
 	     pos < pkts_n;
 	     pos += MLX5_VPMD_DESCS_PER_LOOP) {
-		//printf("Received %d/%d, elts idx %d\n",pos, pkts_n, elts_idx);
+		//fprintf( stderr,"Received %d/%d, elts idx %d\n",pos, pkts_n, elts_idx);
 		__m128i cqes[MLX5_VPMD_DESCS_PER_LOOP];
 		__m128i cqe_tmp1, cqe_tmp2;
 		//__m128i pkt_mb0, pkt_mb1, pkt_mb2, pkt_mb3;
@@ -1231,7 +1330,9 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		for (int i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
 			// pos is accumulated in elts at the end of the loop
 			struct xchg* next = xchg_rx_next(elts + i, xchgs, rxq->mp);
-			xchgs_vec[i] = next;
+			//fprintf(stderr, "Next have now buffer %p:%p -> %x, elts is %p\n",next, xchg_get_buffer_addr(next), *(((unsigned char*)xchg_get_buffer_addr(next)) + 128), ((unsigned char*)elts[i]) +128 );
+			if (!xchg_is_vec)
+				xchgs_vec[i] = next;
 			xchg_rx_advance(next, &xchgs);
 		}
 		/* A.1 load a block having op_own. */
@@ -1270,7 +1371,9 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		pkt_mb2 = _mm_add_epi32(pkt_mb2, flow_mark_adj);
 		#endif
 		xchg_set_data_len(xchgs_vec[3],rte_be_to_cpu_32(cq[pos + p3].byte_cnt));
+		//fprintf( stderr,"DL3 %d xchg %p", rte_be_to_cpu_32(cq[pos + p3].byte_cnt), xchgs_vec[3]);
 		xchg_set_data_len(xchgs_vec[2],rte_be_to_cpu_32(cq[pos + p2].byte_cnt));
+		//fprintf( stderr,"DL2 %d xchg %p", rte_be_to_cpu_32(cq[pos + p2].byte_cnt), xchgs_vec[2]);
 		/* D.1 fill in mbuf - rx_descriptor_fields1. */
 		//_mm_storeu_si128((void *)&pkts[pos + 3]->pkt_len, pkt_mb3);
 		//_mm_storeu_si128((void *)&pkts[pos + 2]->pkt_len, pkt_mb2);
@@ -1308,6 +1411,9 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 		//_mm_storeu_si128((void *)&pkts[pos]->pkt_len, pkt_mb0);
 		xchg_set_data_len(xchgs_vec[1],rte_be_to_cpu_32(cq[pos + p1].byte_cnt));
 		xchg_set_data_len(xchgs_vec[0],rte_be_to_cpu_32(cq[pos + 0].byte_cnt));
+		//fprintf( stderr,"DL1 %d xchg %p", rte_be_to_cpu_32(cq[pos + p1].byte_cnt), xchgs_vec[1]);
+
+		//fprintf( stderr,"DL0 %d xchg %p", rte_be_to_cpu_32(cq[pos + 0].byte_cnt), xchgs_vec[0]);
 		/* E.2 flip owner bit to mark CQEs from last round. */
 		owner_mask = _mm_and_si128(op_own, owner_check);
 		if (ownership)
@@ -1405,16 +1511,26 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 				#pragma GCC unroll 3
 				#endif
 				for (unsigned i = 0; i < n; i++) {
-					//printf("Validate %p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci&q_mask,rxq->cq_ci&q_mask);
+					//fprintf( stderr,"Validate %p->%p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i],xchg_get_buffer_addr(xchgs_vec[i]), i,n,nocmp_n,elts_idx,rxq->rq_ci&q_mask,rxq->cq_ci&q_mask);
+
 					wq[i].addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(elts[i]));
 					if (unlikely(mlx5_mr_btree_len(&rxq->mr_ctrl.cache_bh) > 1)) {
-							printf("slow\n");
+							fprintf( stderr,"slow\n");
 							wq->lkey = mlx5_rx_mb2mr(rxq, elts[i]);
 					}
 					xchg_rx_finish_packet(xchgs_vec[i]);
 				}
+				wq+=n;
 				xchg_last = xchgs_vec[n - 1];
-			}
+				if (xchg_is_vec)
+					xchgs = &xchgs_vec[n];
+				else
+					*xchgs = xchgs_vec[n];
+			} else
+				if (xchg_is_vec)
+					xchgs = &xchgs_vec[0];
+				else
+					*xchgs = xchgs_vec[0];
 
 			//The packets we received were actually not ready... Rollback!
 			#if defined(__clang__)
@@ -1423,41 +1539,48 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 			#pragma GCC unroll 4
 			#endif
 			for (int i = n; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
-				/*if (n > 0)
-					printf("Cancel %p %d/%lu/%d idx %d,%u,%u\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci & q_mask,rxq->cq_ci &q_mask);*/
+				//if (n > 0)
+
 				struct rte_mbuf* tmp = xchg_get_mbuf(xchgs_vec[i]); //Tmp is the buffer where we should receive something
+				//fprintf( stderr,"Cancel %p %d/%lu/%d idx %d,%u,%u. Elts back to %p (%x), buf back to %p(%x)\n",xchgs_vec[i], i,n,nocmp_n,elts_idx,rxq->rq_ci & q_mask,rxq->cq_ci &q_mask,((unsigned char*)tmp) + 128,*(((unsigned char*)tmp)+256),xchg_get_buffer_addr(xchgs_vec[i]),*((unsigned char*)xchg_get_buffer_addr(xchgs_vec[i])+128));
 				xchg_rx_cancel(xchgs_vec[i], elts[i]);
 				elts[i] = tmp;
+				//fprintf( stderr,"Elts %d back to %p\n",elts_idx+pos+i,((unsigned char*)tmp)+128);
 
 			}
 			break;
 		}
 		//All 4 packets are good to go!
-		//printf("Received 4, idx %d!\n",elts_idx + pos);
+		//fprintf( stderr,"Received 4, idx %d!\n",elts_idx + pos);
 		#if defined(__clang__)
 		#pragma unroll MLX5_VPMD_DESCS_PER_LOOP
 		#elif __GNUC_PREREQ(8,0)
 		#pragma GCC unroll 4
 		#endif
 		for (unsigned i = 0; i < MLX5_VPMD_DESCS_PER_LOOP; i++) {
-			//printf("%p -> %p\n", xchgs_vec[i], xchg_get_buffer(xchgs_vec[i]));
+			//fprintf( stderr,"%p -> %p\n", xchgs_vec[i], xchg_get_buffer(xchgs_vec[i]));
 			wq->addr = rte_cpu_to_be_64((uintptr_t)xchg_buffer_from_elt(*elts));
 			if (unlikely(mlx5_mr_btree_len(&rxq->mr_ctrl.cache_bh) > 1)) {
-					printf("slow\n");
+					fprintf( stderr,"slow\n");
 					wq->lkey = mlx5_rx_mb2mr(rxq, *elts);
 			}
+			assert((((unsigned char*)xchg_get_buffer_addr(xchgs_vec[i])) - 128) != (unsigned char*)&rxq->fake_mbuf);
+			//fprintf( stderr,"Finish %p -> %x",xchgs_vec[i], *(((unsigned char*)xchg_get_buffer_addr(xchgs_vec[i])) + 128));
 			xchg_rx_finish_packet(xchgs_vec[i]);
 			++elts;
 			++wq;
 		}
 		xchg_last = xchgs_vec[3];
+		if (xchg_is_vec)
+			xchgs_vec+=MLX5_VPMD_DESCS_PER_LOOP;
 	}
-	xchg_rx_last_packet(xchg_last, xchgs);
 
 
 	/* If no new CQE seen, return without updating cq_db. */
 	if (unlikely(!nocmp_n && comp_idx == MLX5_VPMD_DESCS_PER_LOOP))
 		return rcvd_pkt;
+
+
 	/* Update the consumer indexes for non-compressed CQEs. */
 	MLX5_ASSERT(nocmp_n <= pkts_n);
 	rxq->cq_ci += nocmp_n;
@@ -1479,34 +1602,22 @@ rxq_burst_v_xchg(struct mlx5_rxq_data *rxq, struct xchg **xchgs, uint16_t pkts_n
 	rxq->stats.ipackets += nocmp_n;
 	rxq->stats.ibytes += rcvd_byte;
 #endif
-	if (comp_enabled) {
-		/* Decompress the last CQE if compressed. */
-		if (comp_idx < MLX5_VPMD_DESCS_PER_LOOP && comp_idx == n) {
-			printf("Decompressing CQs...\n");
-			MLX5_ASSERT(comp_idx == (nocmp_n % MLX5_VPMD_DESCS_PER_LOOP));
-			rxq->decompressed = rxq_cq_decompress_v_xchg(rxq, &cq[nocmp_n],
-								elts,xchgs);
-			/* Return more packets if needed. */
-			if (nocmp_n < pkts_n) {
-				uint16_t n = rxq->decompressed;
-
-				n = RTE_MIN(n, pkts_n - nocmp_n);
-				//TODO
-				//rxq_swap_mbuf_v_xchg(rxq, &pkts[nocmp_n], n);
-				//const uint16_t q_mask = (1 << rxq->elts_n) - 1;
-				//elts = &(*rxq->elts)[rxq->rq_pi & q_mask]; TODO : rq_pi?
-
-				for (int i = 0; i < rcvd_pkt; i++) {
-					struct xchg* next = xchg_rx_next(elts + i, xchgs, rxq->mp);
-					xchg_rx_advance(next, &xchgs);
-				}
-
-				rxq->rq_pi += n;
-				rcvd_pkt += n;
-				rxq->decompressed -= n;
-			}
-		}
+	if (comp_enabled && comp_idx < MLX5_VPMD_DESCS_PER_LOOP && comp_idx == n) {
+			pkts_n -= nocmp_n;
+			//fprintf( stderr,"Decompressing CQs... CQ %d, max %d\n",nocmp_n, pkts_n);
+			rxq->decompressed = rte_be_to_cpu_32(cq[nocmp_n].byte_cnt);
+			if (likely(pkts_n > 7 || pkts_n >= rxq->decompressed))
+				goto decomp;
 	}
+	/*
+	else {
+		if (nocmp_n > 0)
+			fprintf( stderr,"Received %d, no compressed\n",nocmp_n);
+	}*/
+
+	if (likely(nocmp_n))
+		xchg_rx_last_packet(xchg_last, xchgs);
+
 	rte_compiler_barrier();
 	*rxq->cq_db = rte_cpu_to_be_32(rxq->cq_ci);
 	rte_cio_wmb();

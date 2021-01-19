@@ -421,6 +421,7 @@ static int
 mlx5_tx_error_cqe_handle(struct mlx5_txq_data *restrict txq,
 			 volatile struct mlx5_err_cqe *err_cqe)
 {
+	printf("ERR syndrome %d\n",err_cqe->syndrome );
 	if (err_cqe->syndrome != MLX5_CQE_SYNDROME_WR_FLUSH_ERR) {
 		const uint16_t wqe_m = ((1 << txq->wqe_n) - 1);
 		struct mlx5_txq_ctrl *txq_ctrl =

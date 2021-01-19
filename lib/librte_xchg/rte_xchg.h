@@ -19,6 +19,23 @@ struct xchg;
 
 
 /**
+ * Is the list of xchange buffers a vector?
+ */
+extern bool xchg_is_vec;
+
+/**
+ * Guarantees:
+ *  - xchg_rx_last_packet() WILL be called at least for the last packet of the burst
+ *    but it MAY be called multiple times due to the internal working of the driver
+ *
+ * If !xchg_is_vec:
+ *  - the pointer passed MAY be changed by the driver to note the current advance.
+ * If xchg_is_vec:
+ *  - the array of buffer will not be touched, the driver will internally advance in it
+ */
+
+
+/**
  * Warning : this file contains a lot of functions, but someone seeking to implement its efficient application using X-Change do not need to implement them all, certain functions are just to allow a backward compatible behavior. Use one of the simple implementation, eg l2fwd-xchg and start from there.
  */
 
