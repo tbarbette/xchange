@@ -114,6 +114,21 @@ This function does not have any loop, as everything to be done "per-packet" is p
 
 The transmit path is more or less the same, but instead of telling the driver how to *write* the metadata, it provides the way to *read* it.
 
+
+## X-Change Examples (l2fwd-xchg)
+
+We developed a sample application, called `l2fwd-xchg`, for DPDK to support X-Change, which is a modified version of the L2 forwarding sample application ([l2fwd][l2fwd-page]). In this example, the metadata is reduced to two simple fields (i.e., the buffer address and packet length) instead of the 128-B `rte_mbuf`. To run `l2fwd-xchg`, you have to run the following commands:
+
+```bash
+cd xchange/examples/l2fwd-xchg/
+export RTE_SDK=<xchange-path>
+export RTE_TARGET=x86_64-native-linux-clanglto
+make
+sudo ./build/l2fwd-xchg -w 0000:17:00.0,rx_vec_en=0,rxq_cqe_comp_en=0,mprq_en=0 --file-prefix tatata -l 0-0  -- -p 1 -q 1 -T 1 2>&1 | sed 's/[^a-zA-Z0-9]//g'
+```
+
+**Make sure to use the right PCIe bus for the command according to your testbed. You may need to change `0000:17:00.0` to another value.**
+
 ## Getting Help
 
 If you have any questions regarding our code or the paper, you can contact [Tom Barbette][tom-page] (barbette at kth.se) and/or [Alireza Farshin][alireza-page] (farshin at kth.se).
@@ -128,3 +143,4 @@ If you have any questions regarding our code or the paper, you can contact [Tom 
 [fastclick-xchg]: https://github.com/tbarbette/fastclick/blob/43deb7c0984dbdf3d26684fac8f16c19957373a9/elements/userlevel/fromdpdkdevicexchg.cc#L248
 [tinynf-link]: https://www.usenix.org/conference/osdi20/presentation/pirelli
 [osdi-20-page]: https://www.usenix.org/conference/osdi20
+[l2fwd-page]: https://doc.dpdk.org/guides/sample_app_ug/l2_forward_real_virtual.html
